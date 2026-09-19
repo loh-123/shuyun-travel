@@ -18,6 +18,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import { t } from '@/i18n'
 import { getLenis } from '@/composables/useLenis'
 import GoldButton from '@/components/common/GoldButton.vue'
 import SectionTitle from '@/components/common/SectionTitle.vue'
@@ -114,10 +115,10 @@ const overviewItems = computed(() => {
     return []
   }
   return [
-    { label: '评分', value: d.score != null ? `${d.score}` : '—' },
-    { label: '等级', value: d.level || '—' },
-    { label: '开放时间', value: d.openTime || '—' },
-    { label: '门票', value: d.ticketInfo || '—' },
+    { label: 'detail.score', value: d.score != null ? `${d.score}` : '—' },
+    { label: 'detail.level', value: d.level || '—' },
+    { label: 'detail.openTime', value: d.openTime || '—' },
+    { label: 'detail.ticket', value: d.ticketInfo || '—' },
   ]
 })
 
@@ -216,7 +217,7 @@ async function onCollect() {
     return
   }
   if (!userStore.isLogin) {
-    ElMessage.warning('请先登录后再收藏')
+    ElMessage.warning(t('detail.loginFirst'))
     router.push('/login')
     return
   }
@@ -225,12 +226,12 @@ async function onCollect() {
     if (collected.value) {
       await request.delete('/user/collection', { params: { targetType: 'SCENIC', targetId: d.id } })
       collected.value = false
-      ElMessage.success('已取消收藏')
+      ElMessage.success(t('detail.unCollected'))
     } else {
       await request.post('/user/collection', { targetType: 'SCENIC', targetId: d.id })
       collected.value = true
       burstGold() // 心形粒子
-      ElMessage.success('已加入收藏')
+      ElMessage.success(t('detail.collectedOk'))
     }
   } catch {
     // 错误提示由响应拦截器统一处理
@@ -246,9 +247,9 @@ async function onShare() {
       return
     }
     await navigator.clipboard.writeText(url)
-    ElMessage.success('链接已复制，去分享吧')
+    ElMessage.success(t('detail.linkCopied'))
   } catch {
-    ElMessage.info('可复制浏览器地址栏链接分享')
+    ElMessage.info(t('detail.copyHint'))
   }
 }
 
@@ -511,9 +512,9 @@ watch(
         <div class="sy-container detail-hero__inner">
           <div class="detail-hero__content">
             <nav class="detail-hero__crumb">
-              <router-link to="/">首页</router-link>
+              <router-link to="/">{{ t('nav.home') }}</router-link>
               <span class="detail-hero__sep">/</span>
-              <router-link to="/scenic">景点</router-link>
+              <router-link to="/scenic">{{ t('nav.scenic') }}</router-link>
               <span class="detail-hero__sep">/</span>
               <span>{{ detail.name }}</span>
             </nav>
@@ -560,7 +561,7 @@ watch(
                   d="M12 20s-7-4.6-7-9.4A4.1 4.1 0 0 1 12 8a4.1 4.1 0 0 1 7 2.6C19 15.4 12 20 12 20z"
                 />
               </svg>
-              <span>{{ collected ? '已收藏' : '收藏' }}</span>
+              <span>{{ collected ? t('detail.collected') : t('detail.collect') }}</span>
             </button>
 
             <button type="button" class="hero-act" @click="onShare">
@@ -576,7 +577,7 @@ watch(
               >
                 <path d="M12 16V4M8 8l4-4 4 4M5 14v5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-5" />
               </svg>
-              <span>分享</span>
+              <span>{{ t('detail.share') }}</span>
             </button>
           </div>
         </div>
@@ -596,7 +597,7 @@ watch(
               <path d="M12 4v16M5 13l7 7 7-7" />
             </svg>
           </span>
-          <span class="detail-hero__scroll-text">向下探索</span>
+          <span class="detail-hero__scroll-text">{{ t('detail.scrollText') }}</span>
         </button>
       </header>
 
@@ -604,7 +605,7 @@ watch(
       <div ref="overviewEl" class="detail-overview" :class="{ 'is-stuck': stuck }">
         <div class="sy-container detail-overview__inner">
           <div v-for="(item, i) in overviewItems" :key="item.label" class="detail-overview__item">
-            <span class="detail-overview__label">{{ item.label }}</span>
+            <span class="detail-overview__label">{{ t(item.label) }}</span>
             <span class="detail-overview__value">{{ item.value }}</span>
             <i v-if="i < overviewItems.length - 1" class="detail-overview__sep" />
           </div>
@@ -617,8 +618,8 @@ watch(
           eyebrow="Gallery"
           variant="on-light"
           decoration
-          title="影像"
-          desc="在抵达之前，先看一遍它的样子。"
+          :title="t('detail.galleryTitle')"
+          :desc="t('detail.galleryDesc')"
         />
 
         <div class="mosaic">
@@ -627,7 +628,7 @@ watch(
             :key="url"
             type="button"
             class="mosaic__cell"
-            :aria-label="`查看第 ${i + 1} 张图片`"
+            :aria-label="t('detail.viewImage', { index: i + 1 })"
             @click="openLightbox(i)"
           >
             <img class="mosaic__img" :src="url" alt="" loading="lazy" decoding="async" />
@@ -639,18 +640,18 @@ watch(
       <!-- ================= 4. 内容区（左右分栏） ================= -->
       <section v-if="detail.description" class="sy-container detail-body">
         <div class="detail-body__main detail-reveal">
-          <h2 class="detail-body__title">关于 {{ detail.name }}</h2>
+          <h2 class="detail-body__title">{{ t('detail.about', { name: detail.name }) }}</h2>
           <p class="detail-intro">{{ detail.description }}</p>
 
           <div v-if="tags.length" class="detail-tags">
-            <span v-for="t in tags" :key="t" class="detail-tag">{{ t }}</span>
+            <span v-for="tag in tags" :key="tag" class="detail-tag">{{ tag }}</span>
           </div>
         </div>
 
         <aside class="detail-body__aside">
           <!-- 天气 -->
           <div v-if="weather" class="panel detail-reveal">
-            <h3 class="panel__title">实时天气</h3>
+            <h3 class="panel__title">{{ t('detail.weather') }}</h3>
             <div class="weather">
               <span class="weather__icon" :class="`weather__icon--${weather.icon}`">
                 <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
@@ -664,25 +665,25 @@ watch(
               </div>
             </div>
             <p class="weather__tip">{{ weather.tip }}</p>
-            <p v-if="weatherIsMock" class="panel__note">示例数据（后端 /api/weather 待接入）</p>
+            <p v-if="weatherIsMock" class="panel__note">{{ t('detail.weatherMock') }}</p>
           </div>
 
           <!-- 位置 -->
           <div class="panel detail-reveal">
-            <h3 class="panel__title">位置</h3>
+            <h3 class="panel__title">{{ t('detail.location') }}</h3>
             <div class="map">
               <span class="map__pin" />
               <span class="map__grid" />
             </div>
-            <p class="map__addr">{{ detail.address || '地址待补充' }}</p>
+            <p class="map__addr">{{ detail.address || t('detail.addressPending') }}</p>
             <a class="map__link sy-btn-text" :href="mapLink" target="_blank" rel="noopener">
-              在地图 App 中打开
+              {{ t('detail.openInMap') }}
             </a>
           </div>
 
           <!-- 周边推荐 -->
           <div v-if="recommends.length" class="panel detail-reveal">
-            <h3 class="panel__title">同城推荐</h3>
+            <h3 class="panel__title">{{ t('detail.sameCity') }}</h3>
             <ul class="reco-list">
               <li v-for="r in recommends" :key="r.id" class="reco-item" @click="goDetail(r.id)">
                 <img class="reco-item__img" :src="r.coverImage" alt="" loading="lazy" />
@@ -696,7 +697,7 @@ watch(
           </div>
 
           <GoldButton block class="detail-reveal" @click="goAssistant">
-            立即规划行程
+            {{ t('detail.planNow') }}
             <template #icon-right>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12h14M13 6l6 6-6 6" />
@@ -712,8 +713,8 @@ watch(
           eyebrow="Nearby"
           variant="on-light"
           decoration
-          title="同城影像"
-          desc="同一座城的另外三处风景，顺路就去看看。"
+          :title="t('detail.sameCityGallery')"
+          :desc="t('detail.sameCityGalleryDesc')"
         />
 
         <div class="puzzle">
@@ -735,16 +736,16 @@ watch(
       <section class="detail-cta">
         <div class="sy-container detail-cta__inner">
           <p class="detail-cta__eyebrow">Sichuan Awaits</p>
-          <h2 class="detail-cta__title">去蜀地，见山水</h2>
-          <GoldButton size="lg" @click="goAssistant">让 AI 帮你规划</GoldButton>
+          <h2 class="detail-cta__title">{{ t('detail.ctaTitle') }}</h2>
+          <GoldButton size="lg" @click="goAssistant">{{ t('detail.ctaButton') }}</GoldButton>
         </div>
       </section>
     </template>
 
     <!-- 不存在 -->
     <div v-else-if="!loading" class="detail-missing">
-      <el-empty description="景点不存在，或需要登录后查看">
-        <GoldButton @click="router.push('/scenic')">返回景点列表</GoldButton>
+      <el-empty :description="t('detail.notFound')">
+        <GoldButton @click="router.push('/scenic')">{{ t('detail.backList') }}</GoldButton>
       </el-empty>
     </div>
 
@@ -752,17 +753,17 @@ watch(
     <Teleport to="body">
       <transition name="lb">
         <div v-if="lbOpen" class="lightbox" @click.self="closeLightbox">
-          <button type="button" class="lightbox__close" aria-label="关闭" @click="closeLightbox">
+          <button type="button" class="lightbox__close" :aria-label="t('common.close')" @click="closeLightbox">
             ✕
           </button>
 
-          <button type="button" class="lightbox__nav lightbox__nav--prev" aria-label="上一张" @click.stop="lbStep(-1)">
+          <button type="button" class="lightbox__nav lightbox__nav--prev" :aria-label="t('detail.prevImage')" @click.stop="lbStep(-1)">
             ‹
           </button>
 
           <img class="lightbox__img" :src="gallery[lbIndex]" alt="" @click.stop />
 
-          <button type="button" class="lightbox__nav lightbox__nav--next" aria-label="下一张" @click.stop="lbStep(1)">
+          <button type="button" class="lightbox__nav lightbox__nav--next" :aria-label="t('detail.nextImage')" @click.stop="lbStep(1)">
             ›
           </button>
 

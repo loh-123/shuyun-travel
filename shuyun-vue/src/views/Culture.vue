@@ -16,6 +16,7 @@ import request from '@/api/request'
 import { getLenis } from '@/composables/useLenis'
 import GoldButton from '@/components/common/GoldButton.vue'
 import CultureIcon from '@/components/common/CultureIcon.vue'
+import { t } from '@/i18n'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -197,7 +198,7 @@ onUnmounted(() => {
         :src="HERO_BG"
         :srcset="`${HERO_BG} 1920w, ${HERO_BG_2X} 2560w`"
         sizes="100vw"
-        alt="巴蜀文化"
+        :alt="t('culture.heroAlt')"
         fetchpriority="high"
         decoding="async"
       />
@@ -210,18 +211,18 @@ onUnmounted(() => {
 
       <div class="sy-container cul-hero__content">
         <nav class="cul-hero__crumb">
-          <router-link to="/">首页</router-link>
+          <router-link to="/">{{ t('nav.home') }}</router-link>
           <span class="cul-hero__sep">/</span>
-          <span>文化</span>
+          <span>{{ t('nav.culture') }}</span>
         </nav>
 
-        <h1 class="cul-hero__title">巴蜀<span>文脉</span></h1>
-        <p class="cul-hero__sub">千年蜀地，八脉相承</p>
+        <h1 class="cul-hero__title">{{ t('culture.heroTitle1') }}<span>{{ t('culture.heroTitle2') }}</span></h1>
+        <p class="cul-hero__sub">{{ t('culture.heroSub') }}</p>
       </div>
     </header>
 
     <!-- ================= 2. 横向文化导航 ================= -->
-    <nav class="cul-nav" aria-label="文化导航">
+    <nav class="cul-nav" :aria-label="t('culture.navAria')">
       <div class="sy-container cul-nav__inner">
         <button
           v-for="item in list"
@@ -266,7 +267,7 @@ onUnmounted(() => {
           </div>
 
           <GoldButton class="cul-card__more" @click="goDetail(item.id)">
-            深入了解
+            {{ t('culture.more') }}
             <template #icon-right>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12h14M13 6l6 6-6 6" />
@@ -281,7 +282,7 @@ onUnmounted(() => {
     <section ref="timelineEl" class="cul-time">
       <div class="sy-container">
         <p class="sy-eyebrow">Timeline</p>
-        <h2 class="sy-page-title">八脉相承 · 一线千年</h2>
+        <h2 class="sy-page-title">{{ t('culture.timelineTitle') }}</h2>
 
         <div class="cul-time__track">
           <span class="cul-time__line" />

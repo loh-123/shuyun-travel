@@ -18,6 +18,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 import request from '@/api/request'
 import GoldButton from '@/components/common/GoldButton.vue'
+import { t } from '@/i18n'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -51,22 +52,22 @@ const HERO_BG_2X =
 /** 每页条数 */
 const PAGE_SIZE = 8
 
-/** 类型胶囊：value 与 scenic_spot.type 真实取值一致，label 用短标签 */
+/** 类型胶囊：value 与 scenic_spot.type 真实取值一致，label 存 i18n key */
 const TYPES = [
-  { label: '全部', value: '' },
-  { label: '自然', value: '自然风光' },
-  { label: '人文', value: '人文古迹' },
-  { label: '博物馆', value: '博物馆' },
-  { label: '红色', value: '红色旅游' },
-  { label: '亲子', value: '亲子' },
-  { label: '古镇', value: '古镇' },
+  { label: 'scenic.typeAll', value: '' },
+  { label: 'scenic.typeNature', value: '自然风光' },
+  { label: 'scenic.typeHuman', value: '人文古迹' },
+  { label: 'scenic.typeMuseum', value: '博物馆' },
+  { label: 'scenic.typeRed', value: '红色旅游' },
+  { label: 'scenic.typeFamily', value: '亲子' },
+  { label: 'scenic.typeTown', value: '古镇' },
 ]
 
 /** 排序方式 */
 const SORTS: { label: string; key: 'default' | 'score' | 'hot' }[] = [
-  { label: '综合', key: 'default' },
-  { label: '评分', key: 'score' },
-  { label: '人气', key: 'hot' },
+  { label: 'scenic.sortDefault', key: 'default' },
+  { label: 'scenic.sortScore', key: 'score' },
+  { label: 'scenic.sortHot', key: 'hot' },
 ]
 
 /* ------------------------------------------------------------
@@ -103,9 +104,9 @@ const stuck = ref(false)
  * ---------------------------------------------------------- */
 const cityLabel = computed(() => {
   if (query.cityId === undefined) {
-    return '全部市州'
+    return t('scenic.allCities')
   }
-  return cities.value.find((c) => c.id === query.cityId)?.name ?? '全部市州'
+  return cities.value.find((c) => c.id === query.cityId)?.name ?? t('scenic.allCities')
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / query.size)))
@@ -414,7 +415,7 @@ watch(
         :src="HERO_BG"
         :srcset="`${HERO_BG} 1920w, ${HERO_BG_2X} 2560w`"
         sizes="100vw"
-        alt="蜀地山水"
+        :alt="t('scenic.heroAlt')"
         fetchpriority="high"
         decoding="async"
       />
@@ -427,13 +428,13 @@ watch(
 
       <div class="sy-container scenic-hero__inner">
         <nav class="scenic-hero__crumb">
-          <router-link to="/">首页</router-link>
+          <router-link to="/">{{ t('nav.home') }}</router-link>
           <span class="scenic-hero__sep">/</span>
-          <span>景点</span>
+          <span>{{ t('nav.scenic') }}</span>
         </nav>
 
-        <h1 class="scenic-hero__title">蜀地<span>秘境</span></h1>
-        <p class="scenic-hero__sub">21 市州 · 千处风光 · 一步一景</p>
+        <h1 class="scenic-hero__title">{{ t('scenic.heroTitle1') }}<span>{{ t('scenic.heroTitle2') }}</span></h1>
+        <p class="scenic-hero__sub">{{ t('scenic.heroSub') }}</p>
       </div>
     </header>
 
@@ -471,7 +472,7 @@ watch(
                 :class="{ 'is-active': query.cityId === undefined }"
                 @click="selectCity(undefined)"
               >
-                全部市州
+                {{ t('scenic.allCities') }}
               </li>
               <li
                 v-for="c in cities"
@@ -489,14 +490,14 @@ watch(
         <!-- 类型：胶囊 -->
         <div class="pills">
           <button
-            v-for="t in TYPES"
-            :key="t.value"
+            v-for="type in TYPES"
+            :key="type.value"
             type="button"
             class="pill"
-            :class="{ 'is-active': query.type === t.value }"
-            @click="selectType(t.value)"
+            :class="{ 'is-active': query.type === type.value }"
+            @click="selectType(type.value)"
           >
-            {{ t.label }}
+            {{ t(type.label) }}
           </button>
         </div>
 
@@ -506,7 +507,7 @@ watch(
             v-model="query.keyword"
             class="usearch__input"
             type="text"
-            placeholder="搜索景点 / 标签"
+            :placeholder="t('scenic.searchPlaceholder')"
             @keyup.enter="onSearch"
           />
           <span class="usearch__line" />
@@ -522,7 +523,7 @@ watch(
             :class="{ 'is-active': sortKey === s.key }"
             @click="selectSort(s.key)"
           >
-            {{ s.label }}
+            {{ t(s.label) }}
           </button>
         </div>
 
@@ -548,9 +549,9 @@ watch(
     <div class="sy-container scenic-body">
       <div class="scenic-body__head">
         <p class="sy-eyebrow">Scenic Spots</p>
-        <h2 class="sy-page-title">蜀地秘境</h2>
+        <h2 class="sy-page-title">{{ t('scenic.pageTitle') }}</h2>
         <p class="sy-page-desc">
-          从都江堰的水利智慧到九寨沟的翠海叠瀑 —— 共 {{ total }} 处景点，按你的节奏慢慢挑。
+          {{ t('scenic.pageDesc', { total }) }}
         </p>
       </div>
 
@@ -577,7 +578,7 @@ watch(
             <!-- hover：查看详情 -->
             <div class="scenic-card__hover">
               <GoldButton size="sm" @click.stop="goDetail(item.id)">
-                查看详情
+                {{ t('scenic.viewDetail') }}
                 <template #icon-right>
                   <svg
                     viewBox="0 0 24 24"
@@ -624,17 +625,17 @@ watch(
       <!-- ================= 5. 空状态 ================= -->
       <div v-if="!loading && !displayList.length" class="scenic-empty">
         <div class="scenic-empty__mark"><span>蜀</span></div>
-        <p class="scenic-empty__text">未找到符合条件的景点</p>
-        <GoldButton @click="onReset">重置筛选</GoldButton>
+        <p class="scenic-empty__text">{{ t('scenic.empty') }}</p>
+        <GoldButton @click="onReset">{{ t('scenic.reset') }}</GoldButton>
       </div>
 
       <!-- ================= 4. 自定义分页 ================= -->
-      <nav v-if="totalPages > 1" class="scenic-pager" aria-label="分页">
+      <nav v-if="totalPages > 1" class="scenic-pager" :aria-label="t('scenic.pagerAria')">
         <button
           type="button"
           class="scenic-pager__arrow"
           :disabled="query.page <= 1"
-          aria-label="上一页"
+          :aria-label="t('scenic.prevPage')"
           @click="goPage(query.page - 1)"
         >
           <svg
@@ -668,7 +669,7 @@ watch(
           type="button"
           class="scenic-pager__arrow"
           :disabled="query.page >= totalPages"
-          aria-label="下一页"
+          :aria-label="t('scenic.nextPage')"
           @click="goPage(query.page + 1)"
         >
           <svg
@@ -692,12 +693,12 @@ watch(
       <div v-if="drawer" class="scenic-drawer" @click.self="drawer = false">
         <div class="scenic-drawer__panel">
           <header class="scenic-drawer__head">
-            <h3>筛选</h3>
-            <button type="button" class="scenic-drawer__close" @click="drawer = false">关闭</button>
+            <h3>{{ t('scenic.filter') }}</h3>
+            <button type="button" class="scenic-drawer__close" @click="drawer = false">{{ t('common.close') }}</button>
           </header>
 
           <div class="scenic-drawer__group">
-            <p class="scenic-drawer__label">市州</p>
+            <p class="scenic-drawer__label">{{ t('scenic.cityLabel') }}</p>
             <div class="pills pills--wrap">
               <button
                 type="button"
@@ -721,7 +722,7 @@ watch(
           </div>
 
           <div class="scenic-drawer__group">
-            <p class="scenic-drawer__label">类型</p>
+            <p class="scenic-drawer__label">{{ t('scenic.typeLabel') }}</p>
             <div class="pills pills--wrap">
               <button
                 v-for="t in TYPES"
@@ -737,7 +738,7 @@ watch(
           </div>
 
           <div class="scenic-drawer__group">
-            <p class="scenic-drawer__label">排序</p>
+            <p class="scenic-drawer__label">{{ t('scenic.sortLabel') }}</p>
             <div class="pills pills--wrap">
               <button
                 v-for="s in SORTS"
@@ -747,13 +748,13 @@ watch(
                 :class="{ 'is-active': sortKey === s.key }"
                 @click="selectSort(s.key)"
               >
-                {{ s.label }}
+                {{ t(s.label) }}
               </button>
             </div>
           </div>
 
-          <GoldButton block class="scenic-drawer__done" @click="drawer = false">完成</GoldButton>
-          <button type="button" class="scenic-drawer__reset" @click="onReset">重置筛选</button>
+          <GoldButton block class="scenic-drawer__done" @click="drawer = false">{{ t('common.done') }}</GoldButton>
+          <button type="button" class="scenic-drawer__reset" @click="onReset">{{ t('scenic.reset') }}</button>
         </div>
       </div>
     </transition>
