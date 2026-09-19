@@ -391,3 +391,28 @@ CREATE TABLE IF NOT EXISTS `user_note` (
     PRIMARY KEY (`id`),
     KEY `idx_user_id` (`user_id`)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '旅行笔记表';
+
+-- ============================================================================
+-- 14. culture 扩展字段：关联景点 / 传承人（仅首次执行时新增列，已存在则跳过）
+-- ============================================================================
+SET @has_c := (SELECT COUNT(*) FROM information_schema.COLUMNS
+               WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'culture' AND COLUMN_NAME = 'related_scenic_ids');
+SET @ddl_c := IF(@has_c = 0,
+                 'ALTER TABLE `culture` ADD COLUMN `related_scenic_ids` VARCHAR(100) DEFAULT NULL COMMENT ''关联景点ID（逗号分隔）'' AFTER `content`, ADD COLUMN `inheritors` TEXT COMMENT ''传承人（每行一条：姓名|身份|一句话）'' AFTER `related_scenic_ids`',
+                 'SELECT 1');
+PREPARE stmt_c FROM @ddl_c;
+EXECUTE stmt_c;
+DEALLOCATE PREPARE stmt_c;
+
+-- 15. 八大文化的关联景点 / 传承人 / 视频（SET 全量赋值，可重复执行）
+--     说明：关联景点与传承人为示例信息，实际以景区与官方公布为准；
+--          video_url 先给 B 站搜索页占位，拿到真实 BV 号后改成
+--          https://player.bilibili.com/player.html?bvid=BVxxxx 即可内嵌播放
+UPDATE `culture` SET `related_scenic_ids` = '9,10,18', `video_url` = 'https://search.bilibili.com/all?keyword=%E5%B7%9D%E5%89%A7%E5%8F%98%E8%84%B8', `inheritors` = '康芷林|川剧宗师|三庆会创始人，被尊为川剧一代宗师\n沈铁梅|川剧表演艺术家|三度获得中国戏剧梅花奖' WHERE `id` = 1;
+UPDATE `culture` SET `related_scenic_ids` = '10,9,17', `video_url` = 'https://search.bilibili.com/all?keyword=%E8%9C%80%E7%BB%A3', `inheritors` = '郝淑萍|蜀绣国家级代表性传承人|致力于蜀绣技艺的系统传承\n孟德芝|蜀绣大师|以双面异色绣见长' WHERE `id` = 2;
+UPDATE `culture` SET `related_scenic_ids` = '18,19,17', `video_url` = 'https://search.bilibili.com/all?keyword=%E5%B7%9D%E8%8F%9C', `inheritors` = '蓝光鉴|现代川菜奠基人|奠定现代川菜宴席格局\n史正良|川菜大师|以刀工与味型创新著称' WHERE `id` = 3;
+UPDATE `culture` SET `related_scenic_ids` = '11,6,1', `video_url` = 'https://search.bilibili.com/all?keyword=%E8%8C%B6%E9%A9%AC%E5%8F%A4%E9%81%93', `inheritors` = '背夫|古道运输者群体|以人力将茶包驮过二郎山\n茶商|以茶易马的商帮|川滇藏贸易的纽带' WHERE `id` = 4;
+UPDATE `culture` SET `related_scenic_ids` = '9,17,4', `video_url` = 'https://search.bilibili.com/all?keyword=%E4%B8%89%E5%9B%BD%E6%96%87%E5%8C%96', `inheritors` = '诸葛亮|蜀汉丞相|鞠躬尽瘁，治蜀有方\n关羽|蜀汉名将|忠义形象深入人心' WHERE `id` = 5;
+UPDATE `culture` SET `related_scenic_ids` = '5,9,10', `video_url` = 'https://search.bilibili.com/all?keyword=%E4%B8%89%E6%98%9F%E5%A0%86', `inheritors` = '冯汉骥|考古学家|三星堆早期考古研究的开拓者\n古蜀工匠|青铜文明创造者|留下青铜神树与纵目面具' WHERE `id` = 6;
+UPDATE `culture` SET `related_scenic_ids` = '14,8,7', `video_url` = 'https://search.bilibili.com/all?keyword=%E5%A4%A7%E7%86%8A%E7%8C%AB', `inheritors` = '胡锦矗|大熊猫研究奠基人|开创中国大熊猫野外生态研究\n张和民|大熊猫保护专家|长期扎根卧龙保护区' WHERE `id` = 7;
+UPDATE `culture` SET `related_scenic_ids` = '19,18,17', `video_url` = 'https://search.bilibili.com/all?keyword=%E5%9B%9B%E5%B7%9D%E7%99%BD%E9%85%92', `inheritors` = '赖高淮|酿酒大师|长期从事浓香型白酒酿造与技艺传承\n酿酒匠人|传统酿制技艺群体|以窖池与制曲工艺代代相传' WHERE `id` = 8;

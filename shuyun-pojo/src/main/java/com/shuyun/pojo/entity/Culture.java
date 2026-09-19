@@ -46,6 +46,14 @@ public class Culture implements Serializable {
     @TableField("content")
     private String content;
 
+    /** 关联景点ID（逗号分隔） */
+    @TableField("related_scenic_ids")
+    private String relatedScenicIds;
+
+    /** 传承人原文（每行一条：姓名|身份|一句话；详情接口会解析为结构化的 inheritors） */
+    @TableField("inheritors")
+    private String inheritorText;
+
     /** 视频地址 */
     @TableField("video_url")
     private String videoUrl;

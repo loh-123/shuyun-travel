@@ -2,6 +2,7 @@ package com.shuyun.web.controller;
 
 import com.shuyun.common.Result;
 import com.shuyun.pojo.entity.Culture;
+import com.shuyun.pojo.vo.CultureDetailVO;
 import com.shuyun.service.CultureService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -49,7 +50,7 @@ public class CultureController {
      * @return 文化详情
      */
     @GetMapping("/{id}")
-    public Result<Culture> detail(@PathVariable Long id) {
+    public Result<CultureDetailVO> detail(@PathVariable Long id) {
         return Result.ok(cultureService.getDetail(id));
     }
 }
