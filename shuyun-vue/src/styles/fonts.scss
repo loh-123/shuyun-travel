@@ -1,0 +1,86 @@
+// ============================================================
+// 字体定义（@font-face + 字体栈变量）
+// ------------------------------------------------------------
+// 说明：
+//   1) 默认全部走 local()，即读取「系统已安装」的字体 —— 不会产生 404；
+//      系统没装时自动回退到 $font-title / $font-body 栈里的下一个字体。
+//   2) 想改用本地字体文件：把文件放进 public/fonts/，然后取消对应
+//      url(...) 行的注释即可（推荐 woff2，中文可做子集化压缩）。
+// ============================================================
+
+// ---------- 中文标题：思源宋体（Heavy / Regular） ----------
+@font-face {
+  font-family: 'Source Han Serif SC';
+  font-style: normal;
+  font-weight: 900;
+  font-display: swap;
+  src:
+    local('Source Han Serif SC Heavy'),
+    local('SourceHanSerifSC-Heavy'),
+    local('Source Han Serif Heavy'),
+    local('Noto Serif SC Black'),
+    local('思源宋体 Heavy');
+  // url('/fonts/SourceHanSerifSC-Heavy.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Source Han Serif SC';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Source Han Serif SC Regular'),
+    local('SourceHanSerifSC-Regular'),
+    local('Source Han Serif Regular'),
+    local('Noto Serif SC'),
+    local('思源宋体 Regular');
+  // url('/fonts/SourceHanSerifSC-Regular.woff2') format('woff2');
+}
+
+// ---------- 中文正文：霞鹜文楷 ----------
+@font-face {
+  font-family: 'LXGW WenKai';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('LXGW WenKai'),
+    local('LXGWWenKai-Regular'),
+    local('霞鹜文楷'),
+    local('Kaiti SC'),
+    local('STKaiti'),
+    local('KaiTi');
+  // url('/fonts/LXGWWenKai-Regular.woff2') format('woff2');
+}
+
+// ---------- 英文标题：Playfair Display ----------
+@font-face {
+  font-family: 'Playfair Display';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src:
+    local('Playfair Display'),
+    local('PlayfairDisplay-Regular');
+  // url('/fonts/PlayfairDisplay-Variable.woff2') format('woff2-variations');
+}
+
+// ---------- 英文正文：Inter ----------
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src:
+    local('Inter'),
+    local('Inter-Regular');
+  // url('/fonts/Inter-Variable.woff2') format('woff2-variations');
+}
+
+// ============================================================
+// 字体栈变量（全局统一在这里定义）
+// ============================================================
+$font-title: 'Source Han Serif SC', 'STZhongsong', 'Songti SC', 'SimSun', serif;
+$font-body: 'LXGW WenKai', 'STKaiti', 'Kaiti SC', 'SimSun', serif;
+$font-en: 'Playfair Display', 'Cormorant Garamond', 'Times New Roman', serif;
+$font-en-body: 'Inter', 'Manrope', 'Helvetica Neue', Arial, sans-serif;

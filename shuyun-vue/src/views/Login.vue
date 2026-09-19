@@ -71,7 +71,13 @@ async function onRegister() {
   <div class="auth">
     <!-- ---------- 左侧：背景图 + 诗句 ---------- -->
     <div class="auth__left" :style="{ backgroundImage: `url(${POEM_BG})` }">
-      <div class="auth__mask" />
+      <!-- 遮罩层复用全局 .sy-overlay，仅把冷调渐变换成蜀锦红调 -->
+      <div class="sy-overlay">
+        <div class="auth__gradient" />
+        <div class="sy-overlay__brocade" />
+        <div class="sy-overlay__noise" />
+      </div>
+
       <div class="auth__poem">
         <p class="auth__poem-line">九天开出一成都</p>
         <p class="auth__poem-line">万户千门入画图</p>
@@ -82,6 +88,7 @@ async function onRegister() {
     <!-- ---------- 右侧：表单 ---------- -->
     <div class="auth__right">
       <div class="auth__card">
+        <p class="auth__eyebrow">Shuyun · Zhiyou</p>
         <h2 class="auth__title">{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h2>
         <p class="auth__tip">
           {{ mode === 'login' ? '登录蜀韵·智游，开启智能旅程' : '注册后即可收藏、规划与对话' }}
@@ -164,6 +171,8 @@ async function onRegister() {
 </template>
 
 <style scoped lang="scss">
+@use '@/styles/variables' as *;
+
 .auth {
   display: flex;
   height: calc(100vh - 68px);
@@ -199,15 +208,15 @@ async function onRegister() {
   }
 }
 
-.auth__mask {
+/* 遮罩层需盖在 Ken Burns 层（::after）之上 */
+.auth__left .sy-overlay {
+  z-index: 1;
+}
+
+.auth__gradient {
   position: absolute;
   inset: 0;
-  z-index: 1;
-  background: linear-gradient(
-    160deg,
-    rgba(140, 31, 40, 0.62) 0%,
-    rgba(36, 26, 27, 0.72) 100%
-  );
+  background: linear-gradient(160deg, rgba(140, 31, 40, 0.58) 0%, rgba(20, 26, 34, 0.74) 100%);
 }
 
 .auth__poem {
@@ -220,19 +229,21 @@ async function onRegister() {
   gap: 6px;
 
   &-line {
-    font-family: var(--font-title);
-    font-size: 42px;
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(28px, 3.2vw, 46px);
     line-height: 1.5;
-    letter-spacing: 6px;
-    color: #fff;
-    text-shadow: 0 4px 24px rgba(0, 0, 0, 0.45);
+    letter-spacing: 0.16em;
+    color: $color-text-light;
+    text-shadow: $shadow-text;
   }
 
   &-from {
     margin-top: 12px;
-    font-size: 14px;
-    letter-spacing: 2px;
-    color: rgba(201, 168, 106, 0.95);
+    font-family: $font-body;
+    font-size: $fs-small;
+    letter-spacing: 0.16em;
+    color: $color-gold;
   }
 }
 
@@ -242,8 +253,8 @@ async function onRegister() {
   flex: 0 0 40%;
   align-items: center;
   justify-content: center;
-  padding: 40px 32px;
-  background: var(--color-paper);
+  padding: clamp(28px, 4vw, 48px) clamp(20px, 3vw, 40px);
+  background: $color-paper;
 }
 
 .auth__card {
@@ -254,17 +265,29 @@ async function onRegister() {
   max-width: 360px;
 }
 
+.auth__eyebrow {
+  font-family: $font-en-body;
+  font-size: $fs-eyebrow;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: $color-gold;
+}
+
 .auth__title {
-  font-size: 28px;
-  letter-spacing: 4px;
-  color: var(--color-primary);
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(26px, 2.4vw, 36px);
+  letter-spacing: 0.12em;
+  color: $color-primary;
 }
 
 .auth__tip {
   margin-bottom: 8px;
-  font-size: 13px;
-  letter-spacing: 1px;
-  color: #8a7a70;
+  font-family: $font-body;
+  font-size: $fs-small;
+  letter-spacing: 0.1em;
+  color: rgba(26, 26, 26, 0.56);
 }
 
 .auth__field {
@@ -281,8 +304,8 @@ async function onRegister() {
   align-items: center;
   justify-content: center;
   gap: 2px;
-  font-size: 13px;
-  color: #8a7a70;
+  font-size: $fs-small;
+  color: rgba(26, 26, 26, 0.56);
 }
 
 /* ---------------- 窄屏：左侧隐藏，表单占满 ---------------- */

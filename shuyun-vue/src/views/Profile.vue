@@ -532,52 +532,83 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
+@use '@/styles/variables' as *;
+
 .profile {
-  max-width: 1180px;
-  margin: 0 auto;
-  padding: 32px 24px 80px;
+  width: 100%;
+  padding: clamp(24px, 3vw, 48px) $gutter clamp(64px, 8vw, 120px);
+  background: $color-paper;
 }
 
-/* ================= 顶部 ================= */
+/* ================= 顶部：头像 + 用户名 ================= */
 .profile__head {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 20px;
-  padding: 26px 28px;
-  border-radius: 18px;
-  background: linear-gradient(120deg, rgba(140, 31, 40, 0.92), rgba(110, 20, 28, 0.92));
-  color: #fff;
+  gap: clamp(16px, 2vw, 26px);
+  padding: clamp(20px, 2.6vw, 36px) clamp(20px, 2.8vw, 44px);
+  border-radius: $radius-card;
+  overflow: hidden;
+  // 墨蓝 → 金调，与首页/AI 屏同源
+  background:
+    radial-gradient(120% 160% at 88% 0%, rgba(201, 168, 106, 0.28) 0%, rgba(14, 42, 71, 0) 60%),
+    linear-gradient(120deg, $color-ink 0%, #16324f 55%, #1d2436 100%);
+  box-shadow: $shadow-card;
+
+  // 蜀锦纹样
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      repeating-linear-gradient(45deg, #{$color-gold} 0 1px, transparent 1px 16px),
+      repeating-linear-gradient(-45deg, #{$color-gold} 0 1px, transparent 1px 16px);
+    opacity: 0.07;
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
 }
 
 .profile__avatar {
-  width: 76px;
-  height: 76px;
+  position: relative;
+  z-index: 1;
+  width: clamp(60px, 6vw, 88px);
+  height: clamp(60px, 6vw, 88px);
   border-radius: 50%;
-  background: #fff;
-  border: 3px solid var(--color-gold);
+  background: $color-paper;
+  border: 2px solid $color-gold;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
 }
 
 .profile__user {
+  position: relative;
+  z-index: 1;
   flex: 1;
 }
 
 .profile__name {
-  font-size: 26px;
-  letter-spacing: 3px;
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(20px, 2.2vw, 32px);
+  letter-spacing: 0.12em;
+  color: $color-text-light;
+  text-shadow: $shadow-text;
 }
 
 .profile__email {
-  margin-top: 4px;
-  font-size: 13px;
+  margin-top: 6px;
+  font-family: $font-body;
+  font-size: $fs-small;
+  letter-spacing: 0.08em;
   color: rgba(201, 168, 106, 0.95);
 }
 
 /* ================= 主体 ================= */
 .profile__body {
   display: grid;
-  grid-template-columns: 200px 1fr;
-  gap: 24px;
-  margin-top: 24px;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: clamp(16px, 2vw, 30px);
+  margin-top: clamp(18px, 2.2vw, 32px);
 }
 
 .menu {
@@ -585,27 +616,34 @@ onMounted(() => {
   flex-direction: column;
   gap: 6px;
   padding: 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  border: 1px solid rgba(201, 168, 106, 0.42);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-card;
   align-self: start;
 
   &__item {
     padding: 11px 14px;
     border-radius: 10px;
-    font-size: 14px;
-    letter-spacing: 1px;
-    color: #4a3a32;
+    font-family: $font-body;
+    font-size: $fs-small;
+    letter-spacing: 0.1em;
+    color: rgba(26, 26, 26, 0.78);
     cursor: pointer;
-    transition: background 0.25s ease, color 0.25s ease;
+    transition:
+      background-color $dur-fast $ease-out-expo,
+      color $dur-fast $ease-out-expo,
+      transform $dur-fast $ease-out-expo;
 
     &:hover {
-      background: rgba(140, 31, 40, 0.06);
+      background: rgba(140, 31, 40, 0.07);
+      transform: translateX(3px);
     }
 
     &.is-active {
-      color: #fff;
-      background: var(--color-primary);
+      color: $color-text-light;
+      background: linear-gradient(120deg, $color-primary, #6e141c);
+      transform: none;
     }
   }
 }
@@ -614,10 +652,25 @@ onMounted(() => {
   min-height: 360px;
 
   &__title {
-    margin-bottom: 20px;
-    font-size: 24px;
-    letter-spacing: 4px;
-    color: var(--color-primary);
+    position: relative;
+    margin-bottom: clamp(16px, 2vw, 26px);
+    padding-left: 16px;
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(19px, 1.8vw, 28px);
+    letter-spacing: 0.14em;
+    color: $color-primary;
+
+    // 左侧金色竖线
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0.14em;
+      left: 0;
+      width: 2px;
+      height: 0.86em;
+      background: $color-gold;
+    }
   }
 
   &__guest {
@@ -631,45 +684,70 @@ onMounted(() => {
 /* ================= 收藏网格 ================= */
 .grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(14px, 1.8vw, 24px);
   min-height: 160px;
 }
 
 .card {
-  border-radius: 14px;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid rgba(201, 168, 106, 0.3);
+  border: 1px solid rgba(201, 168, 106, 0.4);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-card;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform $dur-base $ease-out-expo,
+    box-shadow $dur-base $ease-out-expo,
+    border-color $dur-base $ease-out-expo;
+  will-change: transform;
 
   &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 16px 34px rgba(140, 31, 40, 0.15);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: $shadow-card-hover;
+    border-color: $color-gold;
+
+    .card__img {
+      transform: scale(1.06);
+    }
   }
 
   &__img {
     position: relative;
-    height: 140px;
+    aspect-ratio: 16 / 10;
     background-size: cover;
     background-position: center;
+    transition: transform 1s $ease-out-expo;
+
+    // 顶部压暗，保证「取消收藏」可读
+    &::after {
+      content: '';
+      position: absolute;
+      inset: 0 0 40% 0;
+      background: linear-gradient(180deg, rgba(20, 26, 34, 0.42), rgba(20, 26, 34, 0));
+      pointer-events: none;
+    }
   }
 
   &__cancel {
     position: absolute;
-    top: 8px;
-    right: 8px;
-    padding: 2px 10px;
-    border-radius: 10px;
+    z-index: 1;
+    top: 10px;
+    right: 10px;
+    padding: 4px 12px;
+    border-radius: $radius-pill;
     font-size: 12px;
-    color: #fff;
-    background: rgba(36, 26, 27, 0.6);
+    letter-spacing: 0.08em;
+    color: $color-text-light;
+    background: rgba(20, 26, 34, 0.62);
+    backdrop-filter: blur(6px);
     opacity: 0;
-    transition: opacity 0.25s ease, background 0.25s ease;
+    transition:
+      opacity $dur-fast $ease-out-expo,
+      background-color $dur-fast $ease-out-expo;
 
     &:hover {
-      background: var(--color-primary);
+      background: $color-primary;
     }
   }
 
@@ -678,27 +756,31 @@ onMounted(() => {
   }
 
   &__body {
-    padding: 12px 14px 16px;
+    padding: clamp(12px, 1.4vw, 18px);
   }
 
   &__name {
-    font-size: 16px;
-    letter-spacing: 2px;
-    color: #2b2b2b;
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(15px, 1.3vw, 19px);
+    letter-spacing: 0.08em;
+    color: $color-text-dark;
   }
 
   &__meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 6px;
-    font-size: 12px;
-    color: #8a7a70;
+    margin-top: 8px;
+    font-family: $font-body;
+    font-size: $fs-small;
+    color: rgba(26, 26, 26, 0.55);
   }
 
   &__score {
-    font-weight: 600;
-    color: var(--color-primary);
+    font-family: $font-en;
+    font-size: 1.15em;
+    color: $color-primary;
   }
 }
 
@@ -709,25 +791,41 @@ onMounted(() => {
   &__row {
     display: flex;
     align-items: center;
-    padding: 12px 0;
-    font-size: 15px;
+    padding: 13px 0;
+    font-family: $font-body;
+    font-size: $fs-small;
     border-bottom: 1px dashed rgba(140, 31, 40, 0.15);
   }
 
   &__label {
     width: 120px;
-    color: var(--color-gold);
+    letter-spacing: 0.12em;
+    color: $color-gold;
   }
 
   &__value {
-    color: #4a3a32;
+    color: rgba(26, 26, 26, 0.78);
   }
 
   &__subtitle {
-    margin: 26px 0 14px;
-    font-size: 17px;
-    letter-spacing: 2px;
-    color: var(--color-primary);
+    position: relative;
+    margin: clamp(22px, 2.6vw, 34px) 0 14px;
+    padding-left: 14px;
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(15px, 1.3vw, 19px);
+    letter-spacing: 0.12em;
+    color: $color-ink;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0.14em;
+      left: 0;
+      width: 2px;
+      height: 0.86em;
+      background: $color-gold;
+    }
   }
 
   &__form {
@@ -743,7 +841,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: clamp(16px, 2vw, 26px);
 
   .content__title {
     margin-bottom: 0;
@@ -753,15 +852,26 @@ onMounted(() => {
 .trips {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: clamp(14px, 1.6vw, 22px);
   min-height: 120px;
 }
 
 .trip {
-  padding: 18px 20px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  padding: clamp(16px, 1.8vw, 26px);
+  border: 1px solid rgba(201, 168, 106, 0.4);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.66);
+  box-shadow: $shadow-card;
+  transition:
+    transform $dur-base $ease-out-expo,
+    box-shadow $dur-base $ease-out-expo,
+    border-color $dur-base $ease-out-expo;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: $shadow-card-hover;
+    border-color: $color-gold;
+  }
 
   &__head {
     display: flex;
@@ -771,24 +881,27 @@ onMounted(() => {
   }
 
   &__title {
-    font-size: 19px;
-    letter-spacing: 2px;
-    color: var(--color-primary);
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(16px, 1.5vw, 22px);
+    letter-spacing: 0.1em;
+    color: $color-primary;
   }
 
   &__meta {
     display: flex;
     flex-wrap: wrap;
     gap: 8px 20px;
-    margin-top: 8px;
-    font-size: 13px;
-    color: #7a6a60;
+    margin-top: 10px;
+    font-family: $font-body;
+    font-size: $fs-small;
+    color: rgba(26, 26, 26, 0.6);
   }
 
   &__days {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
     margin-top: 14px;
     padding-top: 14px;
     border-top: 1px dashed rgba(140, 31, 40, 0.15);
@@ -797,27 +910,30 @@ onMounted(() => {
       display: flex;
       flex-wrap: wrap;
       gap: 6px 16px;
-      font-size: 13px;
-      color: #4a3a32;
+      font-family: $font-body;
+      font-size: $fs-small;
+      color: rgba(26, 26, 26, 0.78);
 
       b {
-        color: var(--color-gold);
+        font-family: $font-en;
+        font-size: 1.05em;
+        color: $color-gold;
       }
     }
   }
 
   &__date {
-    color: #9a8b82;
+    color: rgba(26, 26, 26, 0.45);
   }
 
   &__empty {
     margin-top: 10px;
-    font-size: 13px;
-    color: #9a8b82;
+    font-size: $fs-small;
+    color: rgba(26, 26, 26, 0.45);
   }
 }
 
-/* ---------- 行程表单 ---------- */
+/* ---------- 行程表单（弹窗内） ---------- */
 .trip-form {
   display: flex;
   flex-direction: column;
@@ -825,10 +941,12 @@ onMounted(() => {
 
   &__row {
     display: flex;
+    flex-wrap: wrap;
     gap: 12px;
 
     :deep(.el-input) {
       flex: 1;
+      min-width: 160px;
     }
   }
 
@@ -837,9 +955,11 @@ onMounted(() => {
     align-items: center;
     justify-content: space-between;
     margin-top: 6px;
-    font-size: 15px;
-    letter-spacing: 2px;
-    color: var(--color-primary);
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(14px, 1.2vw, 17px);
+    letter-spacing: 0.1em;
+    color: $color-primary;
   }
 
   &__day {
@@ -856,16 +976,17 @@ onMounted(() => {
   }
 
   &__day-no {
-    width: 32px;
-    font-size: 13px;
-    color: var(--color-gold);
+    width: 34px;
+    font-family: $font-en;
+    font-size: $fs-small;
+    color: $color-gold;
   }
 }
 
 /* ================= 响应式 ================= */
 @media (max-width: 1000px) {
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
+  .profile__body {
+    grid-template-columns: 180px minmax(0, 1fr);
   }
 }
 
@@ -879,8 +1000,8 @@ onMounted(() => {
     flex-wrap: wrap;
   }
 
-  .grid {
-    grid-template-columns: 1fr;
+  .profile__head {
+    flex-wrap: wrap;
   }
 }
 </style>

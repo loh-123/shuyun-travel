@@ -122,7 +122,7 @@ onMounted(loadDetail)
 </script>
 
 <template>
-  <section v-loading="loading" class="detail">
+  <section v-loading="loading" class="sy-page detail">
     <template v-if="detail">
       <!-- ============ 顶部大图轮播 ============ -->
       <div class="detail__gallery">
@@ -213,30 +213,38 @@ onMounted(loadDetail)
 </template>
 
 <style scoped lang="scss">
+@use '@/styles/variables' as *;
+
+/* 页面外壳由全局 .sy-page 提供，这里只收紧顶部间距 */
 .detail {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px 24px 80px;
+  padding-top: clamp(16px, 2vw, 32px);
 }
 
 /* ---------- 轮播 ---------- */
 .detail__gallery {
-  border-radius: 18px;
+  border-radius: $radius-card;
   overflow: hidden;
+  box-shadow: $shadow-card;
 
   :deep(.swiper-button-next),
   :deep(.swiper-button-prev) {
-    color: #fff;
-    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    color: $color-gold;
+    text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+  }
+
+  :deep(.swiper-pagination-bullet) {
+    background: $color-text-light;
+    opacity: 0.5;
   }
 
   :deep(.swiper-pagination-bullet-active) {
-    background: var(--color-gold);
+    background: $color-gold;
+    opacity: 1;
   }
 }
 
 .detail__swiper {
-  height: 420px;
+  height: clamp(300px, 46vh, 560px);
 }
 
 .detail__slide {
@@ -250,8 +258,8 @@ onMounted(loadDetail)
 .detail__main {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: 32px 0 8px;
+  gap: clamp(14px, 1.8vw, 24px);
+  padding: clamp(24px, 3vw, 44px) 0 8px;
 }
 
 .detail__head {
@@ -262,20 +270,26 @@ onMounted(loadDetail)
 }
 
 .detail__name {
-  font-size: 38px;
-  letter-spacing: 6px;
-  color: var(--color-primary);
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(28px, 3.6vw, 52px);
+  letter-spacing: 0.14em;
+  color: $color-primary;
 }
 
 .detail__score {
-  font-family: var(--font-title);
-  font-size: 34px;
-  font-weight: 600;
-  color: var(--color-gold);
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  font-family: $font-en;
+  font-size: clamp(26px, 3vw, 42px);
+  line-height: 1;
+  color: $color-gold;
 
   span {
-    margin-left: 2px;
-    font-size: 14px;
+    font-family: $font-body;
+    font-size: $fs-small;
+    color: rgba(26, 26, 26, 0.5);
   }
 }
 
@@ -283,13 +297,19 @@ onMounted(loadDetail)
   display: flex;
   flex-wrap: wrap;
   gap: 10px 28px;
-  font-size: 14px;
-  color: #4a3a32;
+  padding: clamp(14px, 1.8vw, 22px) clamp(16px, 2vw, 26px);
+  border: 1px solid rgba(201, 168, 106, 0.4);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.6);
+  font-family: $font-body;
+  font-size: $fs-small;
+  color: rgba(26, 26, 26, 0.78);
 
   b {
-    margin-right: 6px;
+    margin-right: 8px;
     font-weight: 400;
-    color: var(--color-gold);
+    letter-spacing: 0.12em;
+    color: $color-gold;
   }
 }
 
@@ -300,99 +320,129 @@ onMounted(loadDetail)
 }
 
 .detail__tag {
-  padding: 3px 12px;
-  border-radius: 10px;
+  padding: 4px 13px;
+  border: 1px solid rgba(201, 168, 106, 0.55);
+  border-radius: $radius-pill;
   font-size: 12px;
-  color: #fff;
-  background: var(--color-primary);
+  letter-spacing: 0.1em;
+  color: $color-primary;
 }
 
 .detail__desc {
-  font-size: 15px;
-  line-height: 2;
-  color: #4a3a32;
+  max-width: 78ch;
+  font-family: $font-body;
+  font-size: $fs-body;
+  line-height: 2.1;
+  color: rgba(26, 26, 26, 0.8);
+  text-align: justify;
 }
 
 /* ---------- 区块 ---------- */
 .block {
-  margin-top: 40px;
+  margin-top: clamp(36px, 5vw, 72px);
 }
 
 .block__title {
-  margin-bottom: 18px;
-  font-size: 22px;
-  letter-spacing: 4px;
-  color: var(--color-primary);
+  position: relative;
+  margin-bottom: clamp(16px, 2vw, 26px);
+  padding-left: 16px;
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(18px, 1.6vw, 26px);
+  letter-spacing: 0.14em;
+  color: $color-ink;
+
+  // 左侧金色竖线
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0.12em;
+    left: 0;
+    width: 2px;
+    height: 0.9em;
+    background: $color-gold;
+  }
 }
 
 .wall {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: clamp(12px, 1.4vw, 20px);
 
   &__item {
-    height: 180px;
-    border-radius: 12px;
+    aspect-ratio: 4 / 3;
+    border-radius: $radius-card;
     background-size: cover;
     background-position: center;
-    transition: transform 0.4s ease;
+    box-shadow: $shadow-card;
+    transition:
+      transform $dur-base $ease-out-expo,
+      box-shadow $dur-base $ease-out-expo;
 
     &:hover {
       transform: scale(1.03);
+      box-shadow: $shadow-card-hover;
     }
   }
 }
 
 .reco {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: clamp(16px, 1.8vw, 26px);
 
   &__card {
-    border-radius: 14px;
     overflow: hidden;
-    background: #fff;
-    border: 1px solid rgba(201, 168, 106, 0.3);
+    border: 1px solid rgba(201, 168, 106, 0.4);
+    border-radius: $radius-card;
+    background: rgba(255, 255, 255, 0.62);
+    box-shadow: $shadow-card;
     cursor: pointer;
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition:
+      transform $dur-base $ease-out-expo,
+      box-shadow $dur-base $ease-out-expo,
+      border-color $dur-base $ease-out-expo;
 
     &:hover {
-      transform: translateY(-5px);
-      box-shadow: 0 16px 34px rgba(140, 31, 40, 0.15);
+      transform: translateY(-8px) scale(1.02);
+      box-shadow: $shadow-card-hover;
+      border-color: $color-gold;
+
+      .reco__img {
+        transform: scale(1.06);
+      }
     }
   }
 
   &__img {
-    height: 140px;
+    aspect-ratio: 16 / 10;
     background-size: cover;
     background-position: center;
+    transition: transform 1s $ease-out-expo;
   }
 
   &__info {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
-    font-size: 15px;
+    padding: clamp(12px, 1.4vw, 18px);
 
     h3 {
-      font-size: 16px;
-      letter-spacing: 2px;
-      color: #2b2b2b;
+      font-family: $font-title;
+      font-size: clamp(15px, 1.2vw, 19px);
+      letter-spacing: 0.08em;
+      color: $color-text-dark;
     }
 
     span {
-      font-size: 13px;
-      color: var(--color-primary);
+      font-family: $font-en;
+      font-size: 1.05em;
+      color: $color-primary;
     }
   }
 }
 
-@media (max-width: 820px) {
-  .detail__swiper {
-    height: 260px;
-  }
-
+@media (max-width: 640px) {
   .wall,
   .reco {
     grid-template-columns: 1fr;

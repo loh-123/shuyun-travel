@@ -115,14 +115,17 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="scenic">
-    <header class="scenic__head">
-      <h1 class="scenic__title">景点导览</h1>
-      <p class="scenic__desc">走遍巴蜀山水 · 共 {{ total }} 处景点</p>
+  <section class="sy-page scenic">
+    <header class="sy-page-head">
+      <p class="sy-eyebrow">Scenic Spots</p>
+      <h1 class="sy-page-title">景点导览</h1>
+      <p class="sy-page-desc">
+        走遍巴蜀山水 —— 从都江堰的水利智慧到九寨沟的翠海叠瀑，共 {{ total }} 处景点等你探访。
+      </p>
     </header>
 
     <!-- ============ 筛选栏 ============ -->
-    <div class="filter">
+    <div class="filter sy-panel">
       <el-select
         v-model="query.cityId"
         placeholder="全部城市"
@@ -205,28 +208,9 @@ onMounted(() => {
 </template>
 
 <style scoped lang="scss">
-.scenic {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 40px 24px 80px;
-}
+@use '@/styles/variables' as *;
 
-.scenic__head {
-  margin-bottom: 24px;
-}
-
-.scenic__title {
-  font-size: 34px;
-  letter-spacing: 6px;
-  color: var(--color-primary);
-}
-
-.scenic__desc {
-  margin-top: 6px;
-  font-size: 14px;
-  letter-spacing: 1px;
-  color: var(--color-gold);
-}
+/* 页面外壳与页头统一由全局 .sy-page / .sy-page-head 提供 */
 
 /* ---------- 筛选栏 ---------- */
 .filter {
@@ -234,94 +218,114 @@ onMounted(() => {
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
-  padding: 16px 18px;
-  margin-bottom: 28px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  padding: clamp(14px, 1.6vw, 22px) clamp(16px, 1.8vw, 26px);
+  margin-bottom: clamp(22px, 3vw, 40px);
 
   &__item {
-    width: 160px;
+    width: clamp(140px, 14vw, 180px);
   }
 
   &__search {
-    width: 240px;
+    width: clamp(180px, 20vw, 280px);
   }
 }
 
 /* ---------- 网格 ---------- */
 .grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: clamp(18px, 2vw, 30px);
   min-height: 240px;
 }
 
 .card {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
   overflow: hidden;
-  background: #fff;
-  border: 1px solid rgba(201, 168, 106, 0.3);
+  border: 1px solid rgba(201, 168, 106, 0.4);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-card;
   cursor: pointer;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  transition:
+    transform $dur-base $ease-out-expo,
+    box-shadow $dur-base $ease-out-expo,
+    border-color $dur-base $ease-out-expo;
+  will-change: transform;
 
   &:hover {
-    transform: translateY(-6px);
-    box-shadow: 0 18px 40px rgba(140, 31, 40, 0.16);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: $shadow-card-hover;
+    border-color: $color-gold;
+
+    .card__img {
+      transform: scale(1.06);
+    }
+
+    .card__name {
+      color: $color-primary;
+    }
   }
 
   &__img {
     position: relative;
-    height: 170px;
+    aspect-ratio: 16 / 10;
     background-size: cover;
     background-position: center;
+    transition: transform 1s $ease-out-expo;
   }
 
   &__level {
     position: absolute;
-    top: 10px;
-    left: 10px;
-    padding: 2px 10px;
-    border-radius: 10px;
+    top: 12px;
+    left: 12px;
+    padding: 4px 13px;
+    border-radius: $radius-pill;
     font-size: 12px;
-    color: #fff;
-    background: rgba(140, 31, 40, 0.85);
+    letter-spacing: 0.08em;
+    color: $color-gold;
+    background: rgba(14, 42, 71, 0.72);
+    backdrop-filter: blur(6px);
   }
 
   &__body {
     display: flex;
+    flex: 1;
     flex-direction: column;
-    gap: 8px;
-    padding: 14px 16px 18px;
+    gap: 9px;
+    padding: clamp(16px, 1.8vw, 24px);
   }
 
   &__name {
-    font-size: 18px;
-    letter-spacing: 2px;
-    color: #2b2b2b;
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(17px, 1.5vw, 22px);
+    letter-spacing: 0.08em;
+    color: $color-text-dark;
+    transition: color $dur-base $ease-out-expo;
   }
 
   &__meta {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    font-size: 12px;
-    color: #8a7a70;
+    font-size: $fs-small;
+    color: rgba(26, 26, 26, 0.55);
   }
 
   &__score {
-    font-weight: 600;
-    color: var(--color-primary);
+    font-family: $font-en;
+    font-size: 1.15em;
+    color: $color-primary;
   }
 
   &__desc {
     display: -webkit-box;
     overflow: hidden;
-    font-size: 13px;
-    line-height: 1.7;
-    color: #6b5b52;
+    font-family: $font-body;
+    font-size: $fs-small;
+    line-height: 1.85;
+    color: rgba(26, 26, 26, 0.66);
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
   }
@@ -330,14 +334,16 @@ onMounted(() => {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
+    margin-top: auto;
   }
 
   &__tag {
-    padding: 1px 8px;
-    border-radius: 8px;
-    font-size: 11px;
-    color: var(--color-primary);
-    background: rgba(140, 31, 40, 0.08);
+    padding: 3px 10px;
+    border: 1px solid rgba(201, 168, 106, 0.5);
+    border-radius: $radius-sm;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: $color-bamboo;
   }
 }
 
@@ -347,22 +353,17 @@ onMounted(() => {
   margin-top: 36px;
 }
 
-/* ---------- 响应式 ---------- */
-@media (max-width: 1100px) {
-  .grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (max-width: 820px) {
-  .grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 540px) {
+/* ---------- 响应式：auto-fit 已自适应，仅小屏收紧 ---------- */
+@media (max-width: 640px) {
   .grid {
     grid-template-columns: 1fr;
+  }
+
+  .filter {
+    &__item,
+    &__search {
+      width: 100%;
+    }
   }
 }
 </style>

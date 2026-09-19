@@ -1,24 +1,56 @@
 // ============================================================
-// 蜀韵·智游 全局样式
-// 主题：朱红 + 鎏金 + 宣纸
+// 全局样式
+// 1) 变量统一来自 variables.scss（内部已 @forward fonts.scss，@font-face 只输出一次）
+// 2) 保留原有的 CSS 自定义属性名（--color-primary / --color-gold / --color-paper /
+//    --font-title / --font-body），确保其它页面（景点/文化/个人中心等）继续可用
 // ============================================================
+@use 'sass:color';
+@use './variables' as *;
 
-// ---------- 主题色 ----------
-$primary: #8c1f28; // 主色：朱红
-$gold: #c9a86a;    // 辅色：鎏金
-$paper: #e8e3d8;   // 背景：宣纸
+// ---------- 蜀锦纹理 / 噪点（可复用的工具样式） ----------
+$pattern-brocade: repeating-linear-gradient(45deg, #{$color-gold} 0 1px, transparent 1px 14px),
+  repeating-linear-gradient(-45deg, #{$color-gold} 0 1px, transparent 1px 14px);
+$pattern-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
 
-// ---------- 字体 ----------
-$font-title: "Source Han Serif SC", "Noto Serif SC", serif;
-$font-body: "LXGW WenKai", "STKaiti", serif;
-
-// 同步注入 CSS 变量，方便在组件里直接引用
+// ---------- CSS 自定义属性（兼容旧页面 + 供 JS 读取） ----------
 :root {
-  --color-primary: #{$primary};
-  --color-gold: #{$gold};
-  --color-paper: #{$paper};
+  --color-primary: #{$color-primary};
+  --color-ink: #{$color-ink};
+  --color-gold: #{$color-gold};
+  --color-paper: #{$color-paper};
+  --color-bamboo: #{$color-bamboo};
+  --color-text-light: #{$color-text-light};
+  --color-text-dark: #{$color-text-dark};
   --font-title: #{$font-title};
   --font-body: #{$font-body};
+  --font-en: #{$font-en};
+  --gutter: #{$gutter};
+
+  // ---------- Element Plus 主题：全站跟随蜀韵色板 ----------
+  --el-color-primary: #{$color-primary};
+  --el-color-primary-light-3: #{color.mix($color-primary, #fff, 70%)};
+  --el-color-primary-light-5: #{color.mix($color-primary, #fff, 50%)};
+  --el-color-primary-light-7: #{color.mix($color-primary, #fff, 30%)};
+  --el-color-primary-light-8: #{color.mix($color-primary, #fff, 20%)};
+  --el-color-primary-light-9: #{color.mix($color-primary, #fff, 10%)};
+  --el-color-primary-dark-2: #{color.mix($color-primary, #000, 82%)};
+
+  --el-text-color-primary: #{$color-text-dark};
+  --el-text-color-regular: #{rgba(26, 26, 26, 0.78)};
+  --el-text-color-secondary: #{rgba(26, 26, 26, 0.52)};
+
+  --el-border-radius-base: 10px;
+  --el-border-color: #{rgba(201, 168, 106, 0.42)};
+  --el-border-color-light: #{rgba(201, 168, 106, 0.3)};
+  --el-border-color-lighter: #{rgba(201, 168, 106, 0.18)};
+
+  --el-input-border-color: #{rgba(201, 168, 106, 0.45)};
+  --el-input-hover-border-color: #{$color-gold};
+  --el-input-focus-border-color: #{$color-gold};
+  --el-input-text-color: #{$color-text-dark};
+
+  --el-font-family: #{$font-body};
+  --el-box-shadow-light: #{$shadow-card};
 }
 
 // ---------- reset ----------
@@ -34,14 +66,21 @@ body,
   height: 100%;
 }
 
+html {
+  // 交给 Lenis 接管平滑滚动，关闭原生平滑以免冲突
+  scroll-behavior: auto;
+}
+
 body {
-  background-color: $paper;
-  color: #2b2b2b;
+  background-color: $color-paper;
+  color: $color-text-dark;
   font-family: $font-body;
-  font-size: 16px;
+  font-size: $fs-body;
   line-height: 1.8;
+  letter-spacing: 0.05em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
 }
 
 h1,
@@ -51,8 +90,9 @@ h4,
 h5,
 h6 {
   font-family: $font-title;
-  font-weight: 600;
-  line-height: 1.4;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 a {
@@ -66,12 +106,21 @@ ol {
 }
 
 img,
-video {
+video,
+svg {
   display: block;
   max-width: 100%;
 }
 
-button,
+button {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
 input,
 textarea,
 select {
@@ -87,29 +136,28 @@ select {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba($primary, 0.06);
+  background: rgba(140, 31, 40, 0.06);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba($primary, 0.35);
+  background: rgba(140, 31, 40, 0.35);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba($primary, 0.55);
+  background: rgba(140, 31, 40, 0.55);
 }
 
-// Firefox
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba($primary, 0.35) rgba($primary, 0.06);
+  scrollbar-color: rgba(140, 31, 40, 0.35) rgba(140, 31, 40, 0.06);
 }
 
 // ---------- 自定义光标 ----------
-// 朱红小圆点：默认光标
-$cursor-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='3' fill='%238c1f28' fill-opacity='0.85'/%3E%3C/svg%3E") 10 10, auto;
-// 鎏金圆环：悬停 / 可点击元素
-$cursor-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%23c9a86a' stroke-width='2'/%3E%3C/svg%3E") 12 12, pointer;
+$cursor-default: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Ccircle cx='10' cy='10' r='3' fill='%238c1f28' fill-opacity='0.85'/%3E%3C/svg%3E")
+  10 10 auto;
+$cursor-pointer: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24'%3E%3Ccircle cx='12' cy='12' r='7' fill='none' stroke='%23c9a86a' stroke-width='2'/%3E%3C/svg%3E")
+  12 12 pointer;
 
 body,
 a,
@@ -124,9 +172,232 @@ button:hover,
   cursor: $cursor-pointer;
 }
 
-// 输入类控件保留系统文本光标，便于编辑
 input,
 textarea,
 [contenteditable="true"] {
   cursor: text;
+}
+
+// ============================================================
+// 可复用工具类（首页各 section 共用）
+// ============================================================
+
+// 内容区：左右留白随屏幕变化，大屏留白更多
+.sy-container {
+  width: 100%;
+  padding-inline: $gutter;
+}
+
+// 小标签（英文小字 + 中文字距）
+.sy-eyebrow {
+  font-family: $font-en-body;
+  font-size: $fs-eyebrow;
+  font-weight: 500;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: $color-gold;
+}
+
+// 段落标题
+.sy-title {
+  font-family: $font-title;
+  font-size: $fs-h2;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: 0.04em;
+}
+
+// 正文行宽限制（60-80 字符，保证可读性）
+.sy-text {
+  max-width: 68ch;
+  font-family: $font-body;
+  font-size: $fs-body;
+  line-height: 1.8;
+}
+
+// 深色底文字
+.sy-on-dark {
+  color: $color-text-light;
+  text-shadow: $shadow-text;
+}
+
+// 金色描边文字
+.sy-outline {
+  color: transparent;
+  -webkit-text-stroke: 1.5px $color-gold;
+}
+
+// ---------- 按钮：主（金色描边→hover 填充） ----------
+.sy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 34px;
+  border: 1px solid $color-gold;
+  border-radius: $radius-pill;
+  background: transparent;
+  color: $color-gold;
+  font-size: $fs-small;
+  letter-spacing: 0.22em;
+  transition:
+    background-color $dur-base $ease-out-expo,
+    color $dur-base $ease-out-expo,
+    box-shadow $dur-base $ease-out-expo;
+
+  &:hover {
+    background-color: $color-gold;
+    color: $color-ink;
+    box-shadow: 0 12px 30px rgba(201, 168, 106, 0.3);
+  }
+}
+
+// ---------- 按钮：次（下划线从左展开） ----------
+.sy-btn-text {
+  position: relative;
+  padding-bottom: 4px;
+  color: currentColor;
+  font-size: $fs-small;
+  letter-spacing: 0.22em;
+
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: 0;
+    width: 100%;
+    height: 1px;
+    background: $color-gold;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform $dur-base $ease-out-expo;
+  }
+
+  &:hover::after {
+    transform: scaleX(1);
+  }
+}
+
+// ---------- 遮罩层：深色渐变 + 蜀锦 + 噪点 ----------
+.sy-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  &__gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, $color-overlay-soft 0%, $color-overlay-strong 100%);
+  }
+
+  &__brocade {
+    position: absolute;
+    inset: 0;
+    background-image: $pattern-brocade;
+    opacity: 0.08;
+    mix-blend-mode: overlay;
+  }
+
+  &__noise {
+    position: absolute;
+    inset: 0;
+    background-image: $pattern-noise;
+    opacity: 0.04;
+  }
+}
+
+// ============================================================
+// 页面级工具类（列表页 / 详情页 / 个人中心等统一使用）
+// ============================================================
+
+// 页面外壳：左右留白随屏幕变化，不再写死 1200px
+.sy-page {
+  width: 100%;
+  padding-inline: $gutter;
+  padding-block: clamp(28px, 4vw, 64px) clamp(64px, 8vw, 120px);
+  background: $color-paper;
+}
+
+.sy-page-head {
+  margin-bottom: clamp(24px, 3.4vw, 48px);
+}
+
+.sy-page-title {
+  margin-top: 12px;
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: $fs-h2;
+  line-height: 1.1;
+  letter-spacing: 0.1em;
+  color: $color-primary;
+}
+
+.sy-page-desc {
+  max-width: 62ch;
+  margin-top: clamp(10px, 1.4vw, 18px);
+  font-family: $font-body;
+  font-size: $fs-body;
+  line-height: 1.9;
+  color: rgba(26, 26, 26, 0.68);
+}
+
+// 面板：金色细边 + 半透明
+.sy-panel {
+  border: 1px solid rgba(201, 168, 106, 0.42);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.6);
+  box-shadow: $shadow-card;
+}
+
+// 悬浮抬升（卡片统一动效）
+.sy-hover-lift {
+  transition:
+    transform $dur-base $ease-out-expo,
+    box-shadow $dur-base $ease-out-expo,
+    border-color $dur-base $ease-out-expo;
+  will-change: transform;
+
+  &:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: $shadow-card-hover;
+    border-color: $color-gold;
+  }
+}
+
+// ============================================================
+// Element Plus 组件微调（配合上面的 CSS 变量，统一全站观感）
+// ============================================================
+.el-button {
+  font-family: $font-body;
+  letter-spacing: 0.14em;
+}
+
+.el-button--primary {
+  --el-button-bg-color: #{$color-primary};
+  --el-button-border-color: #{$color-primary};
+  --el-button-hover-bg-color: #{$color-gold};
+  --el-button-hover-border-color: #{$color-gold};
+  --el-button-hover-text-color: #{$color-ink};
+  --el-button-active-bg-color: #{$color-primary};
+  --el-button-active-border-color: #{$color-primary};
+}
+
+.el-card,
+.el-dialog {
+  border-radius: $radius-card;
+}
+
+.el-dialog__title {
+  font-family: $font-title;
+  letter-spacing: 0.12em;
+}
+
+// ---------- 无障碍：尊重系统的「减少动态效果」 ----------
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

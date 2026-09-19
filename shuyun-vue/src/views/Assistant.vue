@@ -282,15 +282,17 @@ onMounted(loadRecommend)
 </template>
 
 <style scoped lang="scss">
+@use '@/styles/variables' as *;
+
+/* 三栏应用式布局：左右留白随屏幕变化 */
 .ai {
   display: grid;
-  grid-template-columns: 240px 1fr 260px;
-  gap: 18px;
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 24px;
+  grid-template-columns: 260px minmax(0, 1fr) 280px;
+  gap: clamp(12px, 1.4vw, 22px);
+  width: 100%;
   height: calc(100vh - 68px);
   min-height: 560px;
+  padding: clamp(14px, 1.6vw, 26px) $gutter;
 }
 
 /* ================= 左侧 ================= */
@@ -298,10 +300,11 @@ onMounted(loadRecommend)
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 16px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  padding: clamp(14px, 1.4vw, 20px);
+  border: 1px solid rgba(201, 168, 106, 0.42);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-card;
   overflow-y: auto;
 }
 
@@ -321,30 +324,37 @@ onMounted(loadRecommend)
     padding: 10px 12px;
     border-radius: 10px;
     cursor: pointer;
-    transition: background 0.25s ease;
+    transition:
+      background-color $dur-fast $ease-out-expo,
+      transform $dur-fast $ease-out-expo;
 
     &:hover {
-      background: rgba(140, 31, 40, 0.06);
+      background: rgba(140, 31, 40, 0.07);
+      transform: translateX(3px);
     }
 
     &.is-active {
-      background: var(--color-primary);
+      background: linear-gradient(120deg, $color-primary, #6e141c);
 
-      .sessions__title,
+      .sessions__title {
+        color: $color-text-light;
+      }
+
       .sessions__time {
-        color: #fff;
+        color: rgba(245, 241, 232, 0.7);
       }
     }
   }
 
   &__title {
-    font-size: 14px;
-    color: #3a2b23;
+    font-family: $font-body;
+    font-size: $fs-small;
+    color: $color-text-dark;
   }
 
   &__time {
     font-size: 11px;
-    color: #9a8b82;
+    color: rgba(26, 26, 26, 0.42);
   }
 }
 
@@ -352,18 +362,34 @@ onMounted(loadRecommend)
 .chat {
   display: flex;
   flex-direction: column;
-  border-radius: 16px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  border: 1px solid rgba(201, 168, 106, 0.42);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.74);
+  box-shadow: $shadow-card;
 }
 
 .chat__head {
-  padding: 14px 20px;
-  font-size: 15px;
-  letter-spacing: 2px;
-  color: #fff;
-  background: linear-gradient(90deg, #8c1f28, #6e141c);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: clamp(13px, 1.4vw, 18px) clamp(16px, 1.8vw, 26px);
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(14px, 1.2vw, 17px);
+  letter-spacing: 0.16em;
+  color: $color-gold;
+  background: linear-gradient(100deg, $color-ink, #16233a 60%, #1d2436);
+
+  // 左侧金色光点
+  &::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: $color-gold;
+    box-shadow: 0 0 12px rgba(201, 168, 106, 0.9);
+  }
 }
 
 .chat__list {
@@ -371,22 +397,26 @@ onMounted(loadRecommend)
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 22px 20px;
+  padding: clamp(18px, 2vw, 28px) clamp(16px, 1.8vw, 26px);
   overflow-y: auto;
 }
 
 .chat__empty {
-  color: #9a8b82;
-  font-size: 14px;
+  max-width: 52ch;
+  font-family: $font-body;
+  font-size: $fs-body;
+  line-height: 1.9;
+  color: rgba(26, 26, 26, 0.5);
 }
 
 .bubble {
-  max-width: 76%;
-  font-size: 14px;
-  line-height: 1.8;
+  max-width: 78%;
+  font-family: $font-body;
+  font-size: $fs-small;
+  line-height: 1.85;
 
   &__text {
-    padding: 10px 15px;
+    padding: 11px 16px;
     border-radius: 14px;
     white-space: pre-wrap;
     word-break: break-word;
@@ -397,9 +427,10 @@ onMounted(loadRecommend)
     align-self: flex-end;
 
     .bubble__text {
-      background: var(--color-primary);
-      color: #fff;
+      background: linear-gradient(120deg, $color-primary, #6e141c);
+      color: $color-text-light;
       border-bottom-right-radius: 4px;
+      box-shadow: 0 6px 18px rgba(140, 31, 40, 0.22);
     }
   }
 
@@ -408,8 +439,9 @@ onMounted(loadRecommend)
     align-self: flex-start;
 
     .bubble__text {
-      background: rgba(201, 168, 106, 0.22);
-      color: #4a3a32;
+      border: 1px solid rgba(201, 168, 106, 0.38);
+      background: rgba(201, 168, 106, 0.16);
+      color: rgba(26, 26, 26, 0.84);
       border-bottom-left-radius: 4px;
     }
   }
@@ -418,8 +450,8 @@ onMounted(loadRecommend)
 .chat__input {
   display: flex;
   gap: 12px;
-  padding: 14px 16px;
-  border-top: 1px solid rgba(201, 168, 106, 0.3);
+  padding: clamp(12px, 1.4vw, 18px) clamp(14px, 1.6vw, 22px);
+  border-top: 1px solid rgba(201, 168, 106, 0.32);
 
   :deep(.el-textarea) {
     flex: 1;
@@ -430,71 +462,106 @@ onMounted(loadRecommend)
 .ai__context {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: clamp(12px, 1.2vw, 18px);
   overflow-y: auto;
 }
 
 .panel {
-  padding: 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  padding: clamp(14px, 1.4vw, 20px);
+  border: 1px solid rgba(201, 168, 106, 0.42);
+  border-radius: $radius-card;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-card;
 
   &__title {
-    margin-bottom: 10px;
-    font-size: 14px;
-    letter-spacing: 2px;
-    color: var(--color-primary);
+    position: relative;
+    margin-bottom: 12px;
+    padding-left: 14px;
+    font-family: $font-title;
+    font-weight: 900;
+    font-size: clamp(13px, 1.1vw, 16px);
+    letter-spacing: 0.12em;
+    color: $color-primary;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0.14em;
+      left: 0;
+      width: 2px;
+      height: 0.86em;
+      background: $color-gold;
+    }
   }
 
   &__list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    font-size: 13px;
+    gap: 9px;
+    font-family: $font-body;
+    font-size: $fs-small;
 
     li {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      color: #4a3a32;
+      gap: 8px;
+      color: rgba(26, 26, 26, 0.78);
     }
 
     span {
       font-size: 11px;
-      color: #9a8b82;
+      color: rgba(26, 26, 26, 0.42);
     }
   }
 
   &__reco {
     cursor: pointer;
+    transition: color $dur-fast $ease-out-expo;
 
     &:hover {
-      color: var(--color-primary);
+      color: $color-primary;
     }
   }
 
   &__weather {
-    font-size: 15px;
-    color: #4a3a32;
+    font-family: $font-title;
+    font-size: clamp(14px, 1.2vw, 18px);
+    color: $color-ink;
   }
 
   &__tip {
-    font-size: 12px;
-    color: #9a8b82;
+    margin-top: 4px;
+    font-size: $fs-small;
+    color: rgba(26, 26, 26, 0.48);
   }
 }
 
 /* ================= 响应式 ================= */
 @media (max-width: 1100px) {
   .ai {
-    grid-template-columns: 200px 1fr;
+    grid-template-columns: 220px minmax(0, 1fr);
     height: auto;
     min-height: calc(100vh - 68px);
   }
 
   .ai__context {
     display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .ai {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 16px;
+  }
+
+  .ai__side {
+    max-height: 180px;
+  }
+
+  .bubble {
+    max-width: 100%;
   }
 }
 </style>

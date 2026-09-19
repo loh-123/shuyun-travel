@@ -1,0 +1,71 @@
+// ============================================================
+// 设计变量：颜色 / 字体 / 间距 / 字号 / 动效 / 层级
+// 所有颜色、字体、间距都收敛在这里，组件里直接 @use 使用
+// ============================================================
+
+// 字体栈来自 fonts.scss，统一对外暴露（组件只需 @use variables 即可）
+@forward './fonts';
+
+// ---------- 颜色 ----------
+$color-primary: #8c1f28; // 蜀锦红
+$color-ink: #0e2a47; // 青城墨蓝
+$color-gold: #c9a86a; // 金沙金
+$color-paper: #e8e3d8; // 宣纸米
+$color-bamboo: #3a5a40; // 竹青
+$color-text-light: #f5f1e8; // 亮色文字（深底）
+$color-text-dark: #1a1a1a; // 暗色文字（浅底，不用纯黑）
+$color-white: #fff;
+
+// ---------- 派生半透明色 ----------
+$color-overlay-strong: rgba(14, 42, 71, 0.75);
+$color-overlay-soft: rgba(14, 42, 71, 0.35);
+$color-scrim: rgba(20, 16, 14, 0.45);
+$color-gold-soft: rgba(201, 168, 106, 0.15);
+$color-gold-line: rgba(201, 168, 106, 0.55);
+$color-primary-soft: rgba(140, 31, 40, 0.08);
+$color-paper-glass: rgba(232, 227, 216, 0.72);
+
+// ---------- 文字阴影（深底可读性）----------
+$shadow-text: 0 2px 24px rgba(0, 0, 0, 0.5);
+$shadow-text-soft: 0 1px 12px rgba(0, 0, 0, 0.35);
+
+// ---------- 卡片阴影 ----------
+$shadow-card: 0 8px 20px rgba(0, 0, 0, 0.1);
+$shadow-card-hover: 0 20px 40px rgba(0, 0, 0, 0.2);
+$shadow-seal: 0 6px 24px rgba(140, 31, 40, 0.32);
+
+// ---------- 圆角 ----------
+$radius-sm: 6px;
+$radius-card: 16px;
+$radius-pill: 999px;
+
+// ---------- 流体间距 ----------
+$gutter: clamp(24px, 5vw, 120px); // 内容区左右留白（大屏留白更多）
+$gap-xl: clamp(48px, 6vw, 120px);
+$gap-lg: clamp(32px, 4vw, 72px);
+$gap-md: clamp(20px, 2.4vw, 40px);
+$gap-sm: clamp(12px, 1.4vw, 20px);
+
+// ---------- 流体字号 ----------
+$fs-hero: clamp(72px, 10vw, 200px); // 首屏主标题
+$fs-h2: clamp(36px, 5vw, 80px); // 每个 section 标题
+$fs-h3: clamp(20px, 2.2vw, 34px);
+$fs-num: clamp(40px, 6vw, 96px); // 数据概览数字
+$fs-body: clamp(15px, 1.2vw, 20px);
+$fs-small: clamp(12px, 0.9vw, 15px);
+$fs-eyebrow: clamp(12px, 1vw, 16px);
+
+// ---------- 动效 ----------
+$ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
+$ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
+$dur-fast: 0.3s;
+$dur-base: 0.6s;
+$dur-slow: 1s;
+
+// ---------- 层级 ----------
+$z-bg: 0;
+$z-content: 2;
+$z-header: 100;
+$z-dots: 120;
+$z-cursor: 240;
+$z-loader: 320;

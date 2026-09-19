@@ -11,6 +11,10 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AiSection: typeof import('./src/components/home/AiSection.vue')['default']
+    CultureSection: typeof import('./src/components/home/CultureSection.vue')['default']
+    CursorGlow: typeof import('./src/components/common/CursorGlow.vue')['default']
+    DataSection: typeof import('./src/components/home/DataSection.vue')['default']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElDialog: typeof import('element-plus/es')['ElDialog']
@@ -20,8 +24,10 @@ declare module 'vue' {
     ElOption: typeof import('element-plus/es')['ElOption']
     ElPagination: typeof import('element-plus/es')['ElPagination']
     ElSelect: typeof import('element-plus/es')['ElSelect']
+    HeroSection: typeof import('./src/components/home/HeroSection.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    SeasonSection: typeof import('./src/components/home/SeasonSection.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']
