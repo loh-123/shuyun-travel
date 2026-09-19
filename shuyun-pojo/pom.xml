@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.shuyun</groupId>
+        <artifactId>shuyun-travel</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>shuyun-pojo</artifactId>
+    <packaging>jar</packaging>
+
+    <name>shuyun-pojo</name>
+    <description>实体对象模块：实体、DTO、VO、枚举</description>
+
+    <dependencies>
+        <!-- 依赖 common -->
+        <dependency>
+            <groupId>com.shuyun</groupId>
+            <artifactId>shuyun-common</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- MyBatis-Plus -->
+        <dependency>
+            <groupId>com.baomidou</groupId>
+            <artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+</project>

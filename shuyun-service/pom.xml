@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.shuyun</groupId>
+        <artifactId>shuyun-travel</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>shuyun-service</artifactId>
+    <packaging>jar</packaging>
+
+    <name>shuyun-service</name>
+    <description>业务逻辑模块：Service 接口与实现</description>
+
+    <dependencies>
+        <!-- 依赖 mapper -->
+        <dependency>
+            <groupId>com.shuyun</groupId>
+            <artifactId>shuyun-mapper</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+</project>
