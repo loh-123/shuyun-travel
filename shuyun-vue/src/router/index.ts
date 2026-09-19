@@ -1,5 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
+import NProgress from 'nprogress'
+import 'nprogress/nprogress.css'
+
+import { getLenis } from '@/composables/useLenis'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -55,7 +59,46 @@ const routes: RouteRecordRaw[] = [
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes,
-  scrollBehavior: () => ({ top: 0 }),
+  /**
+   * 切换路由时回到顶部。
+   * 注：页面里挂载了 Lenis 全局平滑滚动，优先交给它处理，避免两边抢滚动。
+   */
+  scrollBehavior: () => {
+    const lenis = getLenis()
+    if (lenis) {
+      lenis.scrollTo(0, { immediate: true })
+    } else {
+      window.scrollTo({ top: 0 })
+    }
+    return false
+  },
+})
+
+/* ---------------- 顶部金色进度条（NProgress） ---------------- */
+NProgress.configure({
+  showSpinner: false,
+  easing: 'ease',
+  speed: 400,
+  minimum: 0.12,
+  trickleSpeed: 160,
+})
+
+router.beforeEach((to, from, next) => {
+  // 同页面（仅参数变化）不重复出进度条，避免闪烁
+  if (to.path !== from.path) {
+    NProgress.start()
+  }
+  next()
+})
+
+router.afterEach((to) => {
+  NProgress.done()
+  const title = to.meta?.title as string | undefined
+  document.title = title ? `${title} · 蜀韵·智游` : '蜀韵·智游 · AI 懂你的巴蜀旅行管家'
+})
+
+router.onError(() => {
+  NProgress.done()
 })
 
 export default router

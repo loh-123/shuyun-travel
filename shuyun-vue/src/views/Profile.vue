@@ -8,7 +8,7 @@
  * 样式全部复用公共设计系统（variables / mixins / GoldButton / useCountUp）
  */
 import { computed, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import DOMPurify from 'dompurify'
 import gsap from 'gsap'
@@ -110,7 +110,19 @@ const STAT_ITEMS = [
  * 状态
  * ---------------------------------------------------------- */
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+
+/** 菜单 key 集合，用于校验 /profile?tab=xxx 参数 */
+const TAB_KEYS: MenuKey[] = ['trips', 'collection', 'history', 'notes', 'settings']
+
+/** 顶部导航下拉可直接跳到指定面板（/profile?tab=trips 等） */
+function applyQueryTab() {
+  const tab = route.query.tab as string | undefined
+  if (tab && TAB_KEYS.includes(tab as MenuKey)) {
+    active.value = tab as MenuKey
+  }
+}
 
 const active = ref<MenuKey>('trips')
 const statsEl = ref<HTMLElement | null>(null)
@@ -700,6 +712,7 @@ onMounted(async () => {
   if (!userStore.isLogin) {
     return
   }
+  applyQueryTab()
   await Promise.all([loadProfile(), loadStats(), loadTrips()])
 
   // Hero 文案依次淡入
@@ -718,6 +731,12 @@ onBeforeUnmount(() => {
     editorRef.value = null
   }
 })
+
+// 顶部导航下拉再次点击「我的行程 / 我的收藏」时，同步切换面板
+watch(
+  () => route.query.tab,
+  () => applyQueryTab(),
+)
 </script>
 
 <template>
