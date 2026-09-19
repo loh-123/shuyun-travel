@@ -17,6 +17,7 @@ import { useUserStore } from '@/stores/user'
 import GoldButton from '@/components/common/GoldButton.vue'
 import CultureIcon from '@/components/common/CultureIcon.vue'
 import GhostButton from '@/components/common/GhostButton.vue'
+import { t } from '@/i18n'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -301,9 +302,9 @@ watch(
 
         <div class="sy-container cd-hero__content">
           <nav class="cd-hero__crumb">
-            <router-link to="/">首页</router-link>
+            <router-link to="/">{{ t('nav.home') }}</router-link>
             <span class="cd-hero__sep">/</span>
-            <router-link to="/culture">文化</router-link>
+            <router-link to="/culture">{{ t('nav.culture') }}</router-link>
             <span class="cd-hero__sep">/</span>
             <span>{{ detail.name }}</span>
           </nav>
@@ -359,12 +360,12 @@ watch(
                 <path d="M8 5v14l11-7z" />
               </svg>
             </span>
-            <span class="cd-video__text">相关影像</span>
+            <span class="cd-video__text">{{ t('cd.video') }}</span>
           </button>
 
           <!-- 相关景点 -->
           <div v-if="detail.relatedScenics?.length" class="cd-panel cd-reveal">
-            <h3 class="cd-panel__title">相关景点</h3>
+            <h3 class="cd-panel__title">{{ t('cd.spots') }}</h3>
             <ul class="cd-spots">
               <li
                 v-for="s in detail.relatedScenics"
@@ -384,7 +385,7 @@ watch(
 
           <!-- 传承人 -->
           <div v-if="detail.inheritors?.length" class="cd-panel cd-reveal">
-            <h3 class="cd-panel__title">传承人</h3>
+            <h3 class="cd-panel__title">{{ t('cd.inheritors') }}</h3>
             <ul class="cd-people">
               <li v-for="p in detail.inheritors" :key="p.name" class="cd-person">
                 <span class="cd-person__avatar">{{ p.name.charAt(0) }}</span>
@@ -399,10 +400,10 @@ watch(
 
           <!-- 标签云 -->
           <div v-if="tags.length" class="cd-panel cd-reveal">
-            <h3 class="cd-panel__title">标签</h3>
+            <h3 class="cd-panel__title">{{ t('cd.tags') }}</h3>
             <div class="cd-cloud">
-              <span v-for="(t, i) in tags" :key="t" class="cd-cloud__item" :class="`cd-cloud__item--${i % 3}`">
-                {{ t }}
+              <span v-for="(tag, i) in tags" :key="tag" class="cd-cloud__item" :class="`cd-cloud__item--${i % 3}`">
+                {{ tag }}
               </span>
             </div>
           </div>
@@ -412,7 +413,7 @@ watch(
       <!-- ================= 3. 同分类推荐 ================= -->
       <section v-if="sameCategory.length" class="sy-container cd-reco">
         <p class="sy-eyebrow">More Culture</p>
-        <h2 class="sy-page-title">同分类文化</h2>
+        <h2 class="sy-page-title">{{ t('cd.sameCategory') }}</h2>
 
         <div class="cd-reco__grid">
           <article
@@ -425,7 +426,7 @@ watch(
             <div class="cd-reco__body">
               <h3 class="cd-reco__name">{{ item.name }}</h3>
               <p class="cd-reco__text">{{ introOf(item) }}</p>
-              <GhostButton>了解详情</GhostButton>
+              <GhostButton>{{ t('cd.more') }}</GhostButton>
             </div>
           </article>
         </div>
@@ -435,9 +436,9 @@ watch(
       <section class="cd-cta">
         <div class="sy-container cd-cta__inner">
           <p class="cd-cta__eyebrow">Ask The Butler</p>
-          <h2 class="cd-cta__title">让 AI 带你了解{{ detail.name }}</h2>
+          <h2 class="cd-cta__title">{{ t('cd.ctaTitle', { name: detail.name }) }}</h2>
           <GoldButton size="lg" @click="goAssistant">
-            让 AI 带你了解
+            {{ t('cd.ctaButton') }}
             <template #icon-right>
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M5 12h14M13 6l6 6-6 6" />
@@ -450,8 +451,8 @@ watch(
 
     <!-- 不存在 -->
     <div v-else-if="!loading" class="cd-missing">
-      <el-empty description="未找到该文化条目">
-        <GoldButton @click="router.push('/culture')">返回文化列表</GoldButton>
+      <el-empty :description="t('cd.notFound')">
+        <GoldButton @click="router.push('/culture')">{{ t('cd.back') }}</GoldButton>
       </el-empty>
     </div>
 
@@ -459,11 +460,11 @@ watch(
     <Teleport to="body">
       <transition name="lb">
         <div v-if="videoOpen" class="cd-lightbox" @click.self="videoOpen = false">
-          <button type="button" class="cd-lightbox__close" aria-label="关闭" @click="videoOpen = false">
+          <button type="button" class="cd-lightbox__close" :aria-label="t('common.close')" @click="videoOpen = false">
             ✕
           </button>
           <div class="cd-lightbox__frame">
-            <iframe :src="detail?.videoUrl" allowfullscreen frameborder="0" title="相关影像" />
+            <iframe :src="detail?.videoUrl" allowfullscreen frameborder="0" :title="t('cd.video')" />
           </div>
         </div>
       </transition>

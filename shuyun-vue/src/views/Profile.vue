@@ -21,6 +21,7 @@ import { useUserStore } from '@/stores/user'
 import { useCountUp } from '@/composables/useCountUp'
 import GoldButton from '@/components/common/GoldButton.vue'
 import GhostButton from '@/components/common/GhostButton.vue'
+import { t } from '@/i18n'
 
 /* ------------------------------------------------------------
  * 类型
@@ -91,19 +92,19 @@ const COLLAGE = [
 
 /** 菜单 */
 const MENUS: { key: MenuKey; label: string; icon: string }[] = [
-  { key: 'trips', label: '我的行程', icon: '🗺' },
-  { key: 'collection', label: '我的收藏', icon: '❤' },
-  { key: 'history', label: '浏览历史', icon: '🕘' },
-  { key: 'notes', label: '我的笔记', icon: '📝' },
-  { key: 'settings', label: '账号设置', icon: '⚙' },
+  { key: 'trips', label: 'nav.trips', icon: '🗺' },
+  { key: 'collection', label: 'nav.collection', icon: '❤' },
+  { key: 'history', label: 'pf.menuHistory', icon: '🕘' },
+  { key: 'notes', label: 'pf.menuNotes', icon: '📝' },
+  { key: 'settings', label: 'pf.menuSettings', icon: '⚙' },
 ]
 
 /** 数据概览配置 */
 const STAT_ITEMS = [
-  { key: 'cities', label: '去过的城市' },
-  { key: 'collections', label: '收藏景点' },
-  { key: 'trips', label: '生成行程' },
-  { key: 'chats', label: 'AI 对话' },
+  { key: 'cities', label: 'pf.statCities' },
+  { key: 'collections', label: 'pf.statCollections' },
+  { key: 'trips', label: 'pf.statTrips' },
+  { key: 'chats', label: 'pf.statChats' },
 ] as const
 
 /* ------------------------------------------------------------
@@ -237,7 +238,7 @@ function removeDay(index: number) {
 
 async function saveTrip() {
   if (!tripForm.title) {
-    ElMessage.warning('请填写行程标题')
+    ElMessage.warning(t('pf.msgTripTitle'))
     return
   }
   savingTrip.value = true
@@ -265,7 +266,7 @@ async function saveTrip() {
     } else {
       await request.post('/user/trip', payload)
     }
-    ElMessage.success('保存成功')
+    ElMessage.success(t('pf.msgSaved'))
     tripDialog.value = false
     await Promise.all([loadTrips(), loadStats()])
   } finally {
@@ -275,17 +276,17 @@ async function saveTrip() {
 
 async function removeTrip(trip: TripItem) {
   try {
-    await ElMessageBox.confirm(`确定删除行程「${trip.title}」吗？`, '提示', {
+    await ElMessageBox.confirm(t('pf.confirmDeleteTrip', { title: trip.title }), t('pf.confirmTitle'), {
       type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+      confirmButtonText: t('pf.confirmDelete'),
+      cancelButtonText: t('common.cancel'),
     })
   } catch {
     return
   }
   try {
     await request.delete(`/user/trip/${trip.id}`)
-    ElMessage.success('已删除')
+    ElMessage.success(t('pf.msgDeleted'))
     await Promise.all([loadTrips(), loadStats()])
   } catch {
     // 错误提示由响应拦截器统一处理
@@ -320,7 +321,7 @@ async function onCancelCollect(id: number) {
   try {
     await request.delete('/user/collection', { params: { targetType: 'SCENIC', targetId: id } })
     collections.value = collections.value.filter((c) => c.id !== id)
-    ElMessage.success('已取消收藏')
+    ElMessage.success(t('pf.msgUncollected'))
     loadStats()
   } catch {
     // 错误提示由响应拦截器统一处理
@@ -350,7 +351,7 @@ async function removeHistory(item: HistoryItem) {
   try {
     await request.delete(`/user/history/${item.id}`)
     history.value = history.value.filter((h) => h.id !== item.id)
-    ElMessage.success('已移除该足迹')
+    ElMessage.success(t('pf.msgHistoryRemoved'))
     loadStats()
   } catch {
     // 错误提示由响应拦截器统一处理
@@ -359,10 +360,10 @@ async function removeHistory(item: HistoryItem) {
 
 async function clearHistory() {
   try {
-    await ElMessageBox.confirm('确定清空全部浏览历史吗？清空后不可恢复。', '提示', {
+    await ElMessageBox.confirm(t('pf.confirmClearHistory'), t('pf.confirmTitle'), {
       type: 'warning',
-      confirmButtonText: '清空',
-      cancelButtonText: '取消',
+      confirmButtonText: t('pf.confirmClear'),
+      cancelButtonText: t('common.cancel'),
     })
   } catch {
     return
@@ -370,7 +371,7 @@ async function clearHistory() {
   try {
     await request.delete('/user/history')
     history.value = []
-    ElMessage.success('已清空')
+    ElMessage.success(t('pf.msgHistoryCleared'))
     loadStats()
   } catch {
     // 错误提示由响应拦截器统一处理
@@ -392,31 +393,31 @@ function relativeTime(time?: string) {
   }
   const m = Math.floor((Date.now() - stamp) / 60000)
   if (m < 1) {
-    return '刚刚'
+    return t('pf.justNow')
   }
   if (m < 60) {
-    return `${m} 分钟前`
+    return t('pf.minutesAgo', { n: m })
   }
   const h = Math.floor(m / 60)
   if (h < 24) {
-    return `${h} 小时前`
+    return t('pf.hoursAgo', { n: h })
   }
   const d = Math.floor(h / 24)
-  return d === 1 ? '昨天' : `${d} 天前`
+  return d === 1 ? t('pf.yesterday') : t('pf.daysAgo', { n: d })
 }
 
 /** 日期分组：今天 / 昨天 / 更早 */
 function dayGroup(time?: string) {
   if (!time) {
-    return '更早'
+    return t('pf.earlier')
   }
   const stamp = new Date(time.replace('T', ' ').replace(/-/g, '/').split('.')[0]).getTime()
   const days = Math.floor((Date.now() - stamp) / 86400000)
   if (days <= 0) {
-    return '今天'
+    return t('pf.today')
   }
   if (days === 1) {
-    return '昨天'
+    return t('pf.yesterday')
   }
   return new Date(stamp).toLocaleDateString('zh-CN')
 }
@@ -460,7 +461,7 @@ const spotOptions = computed(() =>
 /** WangEditor 实例 */
 const editorRef = shallowRef()
 const toolbarConfig = {}
-const editorConfig = { placeholder: '写下这段旅程的心情、路线与花费…' }
+const editorConfig = { placeholder: t('pf.noteEditorPh') }
 
 function onEditorCreated(editor: unknown) {
   editorRef.value = editor
@@ -521,7 +522,7 @@ function openNote(item?: NoteItem) {
 async function saveNote() {
   const plain = noteForm.content.replace(/<[^>]+>/g, '').trim()
   if (!noteForm.title.trim() && !plain) {
-    ElMessage.warning('标题和正文不能同时为空')
+    ElMessage.warning(t('pf.msgNoteEmpty'))
     return
   }
   savingNote.value = true
@@ -539,7 +540,7 @@ async function saveNote() {
     } else {
       await request.post('/user/note', payload)
     }
-    ElMessage.success('已保存')
+    ElMessage.success(t('pf.msgNoteSaved'))
     noteDialog.value = false
     await loadNotes()
   } finally {
@@ -549,10 +550,10 @@ async function saveNote() {
 
 async function removeNote(item: NoteItem) {
   try {
-    await ElMessageBox.confirm(`确定删除笔记「${item.title || '未命名笔记'}」吗？`, '提示', {
+    await ElMessageBox.confirm(t('pf.confirmDeleteNote', { title: item.title || t('pf.untitled') }), t('pf.confirmTitle'), {
       type: 'warning',
-      confirmButtonText: '删除',
-      cancelButtonText: '取消',
+      confirmButtonText: t('pf.confirmDelete'),
+      cancelButtonText: t('common.cancel'),
     })
   } catch {
     return
@@ -613,7 +614,7 @@ async function saveProfile() {
     if (res.data) {
       userStore.setUser(res.data)
     }
-    ElMessage.success('资料已更新')
+    ElMessage.success(t('pf.msgProfileSaved'))
     profileDialog.value = false
   } finally {
     savingProfile.value = false
@@ -623,7 +624,7 @@ async function saveProfile() {
 /** 选择头像文件 */
 function pickAvatar() {
   if (!userStore.isLogin) {
-    ElMessage.warning('请先登录')
+    ElMessage.warning(t('pf.msgLoginFirst'))
     return
   }
   avatarInput.value?.click()
@@ -646,7 +647,7 @@ async function onAvatarChange(e: Event) {
     if (res.data && current) {
       userStore.setUser({ ...current, avatar: res.data })
     }
-    ElMessage.success('头像已更新')
+    ElMessage.success(t('pf.msgAvatarSaved'))
   } finally {
     uploadingAvatar.value = false
     input.value = ''
@@ -655,11 +656,11 @@ async function onAvatarChange(e: Event) {
 
 async function onChangePassword() {
   if (!pwdForm.oldPassword || !pwdForm.newPassword) {
-    ElMessage.warning('请填写原密码和新密码')
+    ElMessage.warning(t('pf.msgPwdRequired'))
     return
   }
   if (pwdForm.newPassword !== pwdForm.confirmPassword) {
-    ElMessage.warning('两次输入的新密码不一致')
+    ElMessage.warning(t('pf.msgPwdMismatch'))
     return
   }
   savingPwd.value = true
@@ -668,7 +669,7 @@ async function onChangePassword() {
       oldPassword: pwdForm.oldPassword,
       newPassword: pwdForm.newPassword,
     })
-    ElMessage.success('密码修改成功')
+    ElMessage.success(t('pf.msgPwdSaved'))
     pwdForm.oldPassword = ''
     pwdForm.newPassword = ''
     pwdForm.confirmPassword = ''
@@ -679,7 +680,7 @@ async function onChangePassword() {
 
 function onLogout() {
   userStore.logout()
-  ElMessage.success('已退出登录')
+  ElMessage.success(t('pf.msgLogout'))
   router.push('/login')
 }
 
@@ -754,9 +755,9 @@ watch(
       </div>
 
       <div class="sy-container pf-hero__inner">
-        <button type="button" class="pf-hero__avatar" title="更换头像" @click="pickAvatar">
+        <button type="button" class="pf-hero__avatar" :title="t('pf.changeAvatar')" @click="pickAvatar">
           <img :src="avatarUrl" alt="avatar" />
-          <span class="pf-hero__avatar-mask">{{ uploadingAvatar ? '上传中…' : '更换' }}</span>
+          <span class="pf-hero__avatar-mask">{{ uploadingAvatar ? t('pf.uploading') : t('pf.change') }}</span>
         </button>
         <input
           ref="avatarInput"
@@ -766,9 +767,9 @@ watch(
           @change="onAvatarChange"
         />
 
-        <h1 class="pf-hero__name">{{ userStore.user?.username || '未登录' }}</h1>
+        <h1 class="pf-hero__name">{{ userStore.user?.username || t('pf.notLogin') }}</h1>
         <p class="pf-hero__bio">
-          {{ userStore.user?.bio || '还没有简介，点右下角写一句吧' }}
+          {{ userStore.user?.bio || t('pf.noBio') }}
         </p>
       </div>
 
@@ -776,7 +777,7 @@ watch(
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M4 20h4l10-10-4-4L4 16v4zM14 6l4 4" />
         </svg>
-        编辑资料
+        {{ t('pf.editProfile') }}
       </button>
     </header>
 
@@ -785,7 +786,7 @@ watch(
       <ul ref="statsEl" class="pf-stats">
         <li v-for="s in stats" :key="s.key" class="pf-stats__item">
           <b class="pf-stats__num">{{ s.num }}</b>
-          <span class="pf-stats__label">{{ s.label }}</span>
+          <span class="pf-stats__label">{{ t(s.label) }}</span>
         </li>
       </ul>
     </div>
@@ -802,15 +803,15 @@ watch(
           @click="active = m.key"
         >
           <span class="pf-menu__icon">{{ m.icon }}</span>
-          {{ m.label }}
+          {{ t(m.label) }}
         </li>
       </ul>
 
       <!-- 右：内容区（切换淡出淡入） -->
       <div class="pf-content">
         <div v-if="!userStore.isLogin" class="pf-guest">
-          <el-empty description="登录后即可管理你的行程、收藏与笔记" />
-          <GoldButton @click="router.push('/login')">去登录</GoldButton>
+          <el-empty :description="t('pf.guest')" />
+          <GoldButton @click="router.push('/login')">{{ t('pf.goLogin') }}</GoldButton>
         </div>
 
         <Transition v-else name="pf-fade" mode="out-in">
@@ -818,33 +819,33 @@ watch(
             <!-- ---------- 我的行程 ---------- -->
             <template v-if="active === 'trips'">
               <div class="pf-head">
-                <h2 class="pf-head__title">我的行程</h2>
-                <GoldButton size="sm" @click="router.push('/assistant')">+ 新建行程</GoldButton>
+                <h2 class="pf-head__title">{{ t('nav.trips') }}</h2>
+                <GoldButton size="sm" @click="router.push('/assistant')">{{ t('pf.newTrip') }}</GoldButton>
               </div>
 
               <div v-loading="loadingTrips" class="trips">
                 <article
-                  v-for="t in trips"
-                  :key="t.id"
+                  v-for="trip in trips"
+                  :key="trip.id"
                   class="trip"
-                  @click="viewTrip(t)"
+                  @click="viewTrip(trip)"
                 >
                   <div class="trip__cover">
-                    <img :src="t.coverImage || COLLAGE[0]" alt="" loading="lazy" />
-                    <span class="trip__days">{{ t.days }} 天</span>
+                    <img :src="trip.coverImage || COLLAGE[0]" alt="" loading="lazy" />
+                    <span class="trip__days">{{ t('pf.days', { n: trip.days }) }}</span>
                   </div>
                   <div class="trip__body">
-                    <h3 class="trip__title">{{ t.title }}</h3>
+                    <h3 class="trip__title">{{ trip.title }}</h3>
                     <p class="trip__meta">
-                      <span v-if="t.companion">同行 · {{ t.companion }}</span>
-                      <span v-if="t.budget">预算 ￥{{ t.budget }}</span>
+                      <span v-if="trip.companion">{{ t('pf.companion', { name: trip.companion }) }}</span>
+                      <span v-if="trip.budget">{{ t('pf.budget', { n: trip.budget }) }}</span>
                     </p>
                     <div class="trip__foot">
-                      <span class="trip__time">{{ relativeTime(t.createTime) }}</span>
+                      <span class="trip__time">{{ relativeTime(trip.createTime) }}</span>
                       <span class="trip__acts">
-                        <button type="button" class="trip__btn" @click.stop="viewTrip(t)">查看</button>
-                        <button type="button" class="trip__btn trip__btn--danger" @click.stop="removeTrip(t)">
-                          删除
+                        <button type="button" class="trip__btn" @click.stop="viewTrip(trip)">{{ t('pf.view') }}</button>
+                        <button type="button" class="trip__btn trip__btn--danger" @click.stop="removeTrip(trip)">
+                          {{ t('common.delete') }}
                         </button>
                       </span>
                     </div>
@@ -852,16 +853,16 @@ watch(
                 </article>
               </div>
 
-              <el-empty v-if="!loadingTrips && !trips.length" description="还没有行程，去 AI 管家规划一条吧">
-                <GoldButton @click="router.push('/assistant')">去规划</GoldButton>
+              <el-empty v-if="!loadingTrips && !trips.length" :description="t('pf.noTrips')">
+                <GoldButton @click="router.push('/assistant')">{{ t('pf.goPlan') }}</GoldButton>
               </el-empty>
             </template>
 
             <!-- ---------- 我的收藏 ---------- -->
             <template v-else-if="active === 'collection'">
               <div class="pf-head">
-                <h2 class="pf-head__title">我的收藏</h2>
-                <span class="pf-head__count">共 {{ collections.length }} 处</span>
+                <h2 class="pf-head__title">{{ t('nav.collection') }}</h2>
+                <span class="pf-head__count">{{ t('pf.collectionCount', { n: collections.length }) }}</span>
               </div>
 
               <div v-loading="loadingCollection" class="cards">
@@ -875,7 +876,7 @@ watch(
                     <button
                       type="button"
                       class="ccard__heart"
-                      title="取消收藏"
+                      :title="t('pf.unCollect')"
                       @click.stop="onCancelCollect(item.id)"
                     >
                       ❤
@@ -889,17 +890,17 @@ watch(
                 </article>
               </div>
 
-              <el-empty v-if="!loadingCollection && !collections.length" description="还没有收藏任何景点">
-                <GoldButton @click="router.push('/scenic')">去逛逛景点</GoldButton>
+              <el-empty v-if="!loadingCollection && !collections.length" :description="t('pf.noCollections')">
+                <GoldButton @click="router.push('/scenic')">{{ t('pf.goScenic') }}</GoldButton>
               </el-empty>
             </template>
 
             <!-- ---------- 浏览历史 ---------- -->
             <template v-else-if="active === 'history'">
               <div class="pf-head">
-                <h2 class="pf-head__title">浏览历史</h2>
+                <h2 class="pf-head__title">{{ t('pf.menuHistory') }}</h2>
                 <button v-if="history.length" type="button" class="pf-head__clear" @click="clearHistory">
-                  清空历史
+                  {{ t('pf.clearHistory') }}
                 </button>
               </div>
 
@@ -913,38 +914,38 @@ watch(
                         <img class="foot__cover" :src="item.coverImage" alt="" loading="lazy" />
                         <span class="foot__info">
                           <b>{{ item.targetName }}</b>
-                          <em>{{ item.subTitle }} · {{ item.targetType === 'CULTURE' ? '文化' : '景点' }}</em>
+                          <em>{{ item.subTitle }} · {{ item.targetType === 'CULTURE' ? t('pf.tagCulture') : t('pf.tagScenic') }}</em>
                           <i>{{ relativeTime(item.viewTime) }}</i>
                         </span>
                         <span class="foot__arrow">→</span>
                       </button>
-                      <button type="button" class="foot__del" @click.stop="removeHistory(item)">移除</button>
+                      <button type="button" class="foot__del" @click.stop="removeHistory(item)">{{ t('pf.remove') }}</button>
                     </li>
                   </ol>
                 </section>
               </div>
 
-              <el-empty v-if="!loadingHistory && !history.length" description="还没有浏览记录，去景点逛逛吧">
-                <GoldButton @click="router.push('/scenic')">去逛景点</GoldButton>
+              <el-empty v-if="!loadingHistory && !history.length" :description="t('pf.noHistory')">
+                <GoldButton @click="router.push('/scenic')">{{ t('pf.goScenic2') }}</GoldButton>
               </el-empty>
             </template>
 
             <!-- ---------- 我的笔记 ---------- -->
             <template v-else-if="active === 'notes'">
               <div class="pf-head">
-                <h2 class="pf-head__title">我的笔记</h2>
-                <GoldButton size="sm" @click="openNote()">写笔记</GoldButton>
+                <h2 class="pf-head__title">{{ t('pf.menuNotes') }}</h2>
+                <GoldButton size="sm" @click="openNote()">{{ t('pf.writeNote') }}</GoldButton>
               </div>
 
               <div class="note-bar">
                 <p class="note-bar__stat">
-                  共 <b>{{ noteStats.count }}</b> 篇 · 累计 <b>{{ noteStats.chars }}</b> 字
+                  {{ t('pf.noteStat', { count: noteStats.count, chars: noteStats.chars }) }}
                 </p>
                 <label class="note-bar__search">
                   <input
                     v-model="noteKeyword"
                     type="text"
-                    placeholder="搜索标题 / 正文 / 标签"
+                    :placeholder="t('pf.searchNote')"
                     @keyup.enter="loadNotes"
                   />
                   <span class="note-bar__line" />
@@ -960,80 +961,80 @@ watch(
                   @click="openNote(item)"
                 >
                   <span class="note__pin" aria-hidden="true" />
-                  <h3 class="note__title">{{ item.title || '未命名笔记' }}</h3>
+                  <h3 class="note__title">{{ item.title || t('pf.untitled') }}</h3>
                   <div class="note__content" v-html="renderNote(item.content)" />
                   <div v-if="splitTags(item.tags).length" class="note__tags">
                     <span v-for="t in splitTags(item.tags)" :key="t" class="note__tag">{{ t }}</span>
                   </div>
                   <footer class="note__foot">
-                    <span v-if="item.targetName" class="note__linked">关联 · {{ item.targetName }}</span>
+                    <span v-if="item.targetName" class="note__linked">{{ t('pf.linked', { name: item.targetName }) }}</span>
                     <span class="note__date">{{ relativeTime(item.updateTime) }}</span>
                   </footer>
-                  <button type="button" class="note__del" @click.stop="removeNote(item)">删除</button>
+                  <button type="button" class="note__del" @click.stop="removeNote(item)">{{ t('common.delete') }}</button>
                 </article>
               </div>
 
-              <el-empty v-if="!loadingNotes && !notes.length" description="还没有笔记，写下第一段旅程吧">
-                <GoldButton @click="openNote()">写笔记</GoldButton>
+              <el-empty v-if="!loadingNotes && !notes.length" :description="t('pf.noNotes')">
+                <GoldButton @click="openNote()">{{ t('pf.writeNote') }}</GoldButton>
               </el-empty>
             </template>
 
             <!-- ---------- 账号设置 ---------- -->
             <template v-else>
               <div class="pf-head">
-                <h2 class="pf-head__title">账号设置</h2>
+                <h2 class="pf-head__title">{{ t('pf.menuSettings') }}</h2>
               </div>
 
               <!-- 资料 -->
               <div class="set-block">
-                <h3 class="set-block__title">基本资料</h3>
+                <h3 class="set-block__title">{{ t('pf.basic') }}</h3>
                 <div class="set-row">
-                  <span class="set-row__label">用户名</span>
+                  <span class="set-row__label">{{ t('pf.username') }}</span>
                   <span class="set-row__value">{{ userStore.user?.username || '—' }}</span>
                 </div>
                 <div class="set-row">
-                  <span class="set-row__label">邮箱</span>
+                  <span class="set-row__label">{{ t('pf.emailLabel') }}</span>
                   <span class="set-row__value">{{ userStore.user?.email || '—' }}</span>
                 </div>
                 <div class="set-row">
-                  <span class="set-row__label">简介</span>
+                  <span class="set-row__label">{{ t('pf.bioLabel') }}</span>
                   <span class="set-row__value">{{ userStore.user?.bio || '—' }}</span>
                 </div>
                 <div class="set-row">
-                  <span class="set-row__label">角色</span>
+                  <span class="set-row__label">{{ t('pf.role') }}</span>
                   <span class="set-row__value">{{ userStore.user?.role || '—' }}</span>
                 </div>
                 <div class="set-row">
-                  <span class="set-row__label">头像</span>
+                  <span class="set-row__label">{{ t('pf.avatarLabel') }}</span>
                   <span class="set-row__value">
-                    <GhostButton @click="pickAvatar">上传新头像</GhostButton>
+                    <GhostButton @click="pickAvatar">{{ t('pf.uploadAvatar') }}</GhostButton>
                   </span>
                 </div>
               </div>
 
               <!-- 密码 -->
               <div class="set-block">
-                <h3 class="set-block__title">修改密码</h3>
+                <h3 class="set-block__title">{{ t('pf.changePwd') }}</h3>
                 <div class="set-form">
-                  <el-input v-model="pwdForm.oldPassword" type="password" size="large" show-password placeholder="原密码" />
-                  <el-input v-model="pwdForm.newPassword" type="password" size="large" show-password placeholder="新密码" />
+                  <el-input v-model="pwdForm.oldPassword" type="password" size="large" show-password :placeholder="t('pf.oldPwd')" />
+                  <el-input v-model="pwdForm.newPassword" type="password" size="large" show-password :placeholder="t('pf.newPwd')" />
                   <el-input
                     v-model="pwdForm.confirmPassword"
                     type="password"
                     size="large"
                     show-password
-                    placeholder="确认新密码"
+                    :placeholder="t('pf.confirmPwd')"
                     @keyup.enter="onChangePassword"
                   />
-                  <GoldButton :disabled="savingPwd" @click="onChangePassword">保存修改</GoldButton>
+                  <GoldButton :disabled="savingPwd" @click="onChangePassword">{{ t('pf.savePwd') }}</GoldButton>
                 </div>
               </div>
 
               <!-- 退出 -->
               <div class="set-block">
-                <h3 class="set-block__title">退出登录</h3>
-                <p class="set-block__tip">退出后需要重新登录才能管理行程与笔记。</p>
-                <button type="button" class="set-logout" @click="onLogout">退出登录</button>
+                <h3 class="set-block__title">{{ t('pf.logoutBlock') }}</h3>
+                <p class="set-block__tip">{{ t('pf.logoutTip') }}</p>
+                <button type="button" class="set-logout" @click="onLogout">{{ t('pf.logoutBlock') }}</button>
               </div>
             </template>
           </div>
@@ -1042,47 +1043,47 @@ watch(
     </div>
 
     <!-- ================= 行程编辑弹窗 ================= -->
-    <el-dialog v-model="tripDialog" :title="tripForm.id ? '编辑行程' : '新建行程'" width="760px" top="6vh">
+    <el-dialog v-model="tripDialog" :title="tripForm.id ? t('pf.tripEdit') : t('pf.tripNew')" width="760px" top="6vh">
       <div class="trip-form">
-        <el-input v-model="tripForm.title" size="large" placeholder="行程标题（如：成都 3 日游）" />
+        <el-input v-model="tripForm.title" size="large" :placeholder="t('pf.tripTitlePh')" />
         <div class="trip-form__row">
           <el-input-number v-model="tripForm.days" :min="1" :max="30" />
-          <el-input v-model="tripForm.companion" placeholder="同行人（如：家人）" />
-          <el-input v-model="tripForm.budget" placeholder="预算（如：3000）" />
+          <el-input v-model="tripForm.companion" :placeholder="t('pf.companionPh')" />
+          <el-input v-model="tripForm.budget" :placeholder="t('pf.budgetPh')" />
         </div>
-        <el-input v-model="tripForm.interests" placeholder="兴趣偏好（如：自然风光,美食）" />
+        <el-input v-model="tripForm.interests" :placeholder="t('pf.interestsPh')" />
 
         <div class="trip-form__days-head">
-          <span>每日明细</span>
-          <el-button link type="primary" @click="addDay">+ 添加一天</el-button>
+          <span>{{ t('pf.dayList') }}</span>
+          <el-button link type="primary" @click="addDay">{{ t('pf.addDay') }}</el-button>
         </div>
 
         <div v-for="(day, index) in tripForm.dayList" :key="index" class="trip-form__day">
           <span class="trip-form__day-no">D{{ day.dayIndex }}</span>
-          <el-input v-model="day.date" placeholder="日期 2026-05-01" />
-          <el-input v-model="day.scenicName" placeholder="景点名称" />
-          <el-input v-model="day.stayDuration" placeholder="停留时长" />
-          <el-input v-model="day.transport" placeholder="交通方式" />
-          <el-input v-model="day.food" placeholder="美食推荐" />
-          <el-button link type="danger" @click="removeDay(index)">移除</el-button>
+          <el-input v-model="day.date" :placeholder="t('pf.datePh')" />
+          <el-input v-model="day.scenicName" :placeholder="t('pf.scenicPh')" />
+          <el-input v-model="day.stayDuration" :placeholder="t('pf.durationPh')" />
+          <el-input v-model="day.transport" :placeholder="t('pf.transportPh')" />
+          <el-input v-model="day.food" :placeholder="t('pf.foodPh')" />
+          <el-button link type="danger" @click="removeDay(index)">{{ t('pf.remove') }}</el-button>
         </div>
       </div>
 
       <template #footer>
-        <el-button @click="tripDialog = false">取消</el-button>
-        <el-button type="primary" :loading="savingTrip" @click="saveTrip">保存</el-button>
+        <el-button @click="tripDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="savingTrip" @click="saveTrip">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ================= 笔记编辑弹窗（WangEditor 富文本） ================= -->
-    <el-dialog v-model="noteDialog" :title="noteForm.id ? '编辑笔记' : '写笔记'" width="760px" top="6vh">
+    <el-dialog v-model="noteDialog" :title="noteForm.id ? t('pf.noteEdit') : t('pf.noteNew')" width="760px" top="6vh">
       <div class="note-form">
         <el-input
           v-model="noteForm.title"
           size="large"
           maxlength="60"
           show-word-limit
-          placeholder="标题（如：九寨沟的第一天）"
+          :placeholder="t('pf.noteTitlePh')"
         />
 
         <div class="note-editor">
@@ -1105,7 +1106,7 @@ watch(
           <el-select
             v-model="noteForm.targetName"
             class="note-form__select"
-            placeholder="关联地点（可选，来自浏览历史）"
+            :placeholder="t('pf.linkSpotPh')"
             clearable
             filterable
             allow-create
@@ -1113,21 +1114,21 @@ watch(
           >
             <el-option v-for="s in spotOptions" :key="s" :label="s" :value="s" />
           </el-select>
-          <el-input v-model="noteForm.tags" placeholder="标签，用逗号分隔（可选）" />
+          <el-input v-model="noteForm.tags" :placeholder="t('pf.tagsPh')" />
         </div>
       </div>
 
       <template #footer>
-        <el-button @click="noteDialog = false">取消</el-button>
-        <el-button type="primary" :loading="savingNote" @click="saveNote">保存</el-button>
+        <el-button @click="noteDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="savingNote" @click="saveNote">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
 
     <!-- ================= 编辑资料弹窗 ================= -->
-    <el-dialog v-model="profileDialog" title="编辑资料" width="520px" top="10vh">
+    <el-dialog v-model="profileDialog" :title="t('pf.editProfile')" width="520px" top="10vh">
       <div class="pf-form">
-        <el-input v-model="profileForm.username" size="large" placeholder="用户名" maxlength="50" />
-        <el-input v-model="profileForm.email" size="large" placeholder="邮箱" maxlength="100" />
+        <el-input v-model="profileForm.username" size="large" :placeholder="t('pf.username')" maxlength="50" />
+        <el-input v-model="profileForm.email" size="large" :placeholder="t('pf.emailLabel')" maxlength="100" />
         <el-input
           v-model="profileForm.bio"
           type="textarea"
@@ -1135,13 +1136,13 @@ watch(
           resize="none"
           maxlength="120"
           show-word-limit
-          placeholder="一句话简介（如：一步一步，把蜀地走成自己的地图）"
+          :placeholder="t('pf.bioPh')"
         />
       </div>
 
       <template #footer>
-        <el-button @click="profileDialog = false">取消</el-button>
-        <el-button type="primary" :loading="savingProfile" @click="saveProfile">保存</el-button>
+        <el-button @click="profileDialog = false">{{ t('common.cancel') }}</el-button>
+        <el-button type="primary" :loading="savingProfile" @click="saveProfile">{{ t('common.save') }}</el-button>
       </template>
     </el-dialog>
   </section>
