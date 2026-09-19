@@ -37,20 +37,17 @@
   // url('/fonts/SourceHanSerifSC-Regular.woff2') format('woff2');
 }
 
-// ---------- 中文正文：霞鹜文楷 ----------
+// ---------- 中文正文：霞鹜文楷（子集 woff2，由 tools/subset-font.py 生成） ----------
 @font-face {
   font-family: 'LXGW WenKai';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
+  // url 放在最前：只要有子集文件就统一用它（未安装该字体的机器也能一致渲染）
   src:
+    url('/fonts/LXGWWenKai-Regular.woff2') format('woff2'),
     local('LXGW WenKai'),
-    local('LXGWWenKai-Regular'),
-    local('霞鹜文楷'),
-    local('Kaiti SC'),
-    local('STKaiti'),
-    local('KaiTi');
-  // url('/fonts/LXGWWenKai-Regular.woff2') format('woff2');
+    local('LXGWWenKai-Regular');
 }
 
 // ---------- 英文标题：Playfair Display ----------

@@ -57,6 +57,9 @@ const TYPES = [
   { label: '自然', value: '自然风光' },
   { label: '人文', value: '人文古迹' },
   { label: '博物馆', value: '博物馆' },
+  { label: '红色', value: '红色旅游' },
+  { label: '亲子', value: '亲子' },
+  { label: '古镇', value: '古镇' },
 ]
 
 /** 排序方式 */
@@ -65,9 +68,6 @@ const SORTS: { label: string; key: 'default' | 'score' | 'hot' }[] = [
   { label: '评分', key: 'score' },
   { label: '人气', key: 'hot' },
 ]
-
-/** 等级权重（用于「人气」近似排序） */
-const LEVEL_WEIGHT: Record<string, number> = { '5A': 3, '4A': 2, '3A': 1 }
 
 /* ------------------------------------------------------------
  * 状态
@@ -109,21 +109,8 @@ const cityLabel = computed(() => {
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / query.size)))
 
-/** 人气近似值：等级权重 * 10 + 评分 */
-function hotValue(item: ScenicItem) {
-  return (LEVEL_WEIGHT[item.level ?? ''] ?? 0) * 10 + Number(item.score ?? 0)
-}
-
-/** 当前页排序结果（后端暂无 sort 参数，先在前端排） */
-const displayList = computed(() => {
-  const arr = [...list.value]
-  if (sortKey.value === 'score') {
-    arr.sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
-  } else if (sortKey.value === 'hot') {
-    arr.sort((a, b) => hotValue(b) - hotValue(a))
-  }
-  return arr
-})
+/** 列表数据：排序已由后端按 sort 参数完成（hot=浏览量、score=评分、default=综合） */
+const displayList = computed(() => list.value)
 
 /** 分页页码（超出 7 页时用省略号收敛） */
 const pageList = computed<(number | 'gap')[]>(() => {
@@ -173,6 +160,7 @@ async function loadList() {
         cityId: query.cityId || undefined,
         type: query.type || undefined,
         keyword: query.keyword || undefined,
+        sort: sortKey.value,
       },
     })
     list.value = res.data?.records ?? []
@@ -229,6 +217,16 @@ function selectType(value: string) {
 }
 
 function onSearch() {
+  query.page = 1
+  reload()
+}
+
+/** 切换排序：交由后端排序后重新拉取 */
+function selectSort(key: 'default' | 'score' | 'hot') {
+  if (sortKey.value === key) {
+    return
+  }
+  sortKey.value = key
   query.page = 1
   reload()
 }
@@ -493,7 +491,7 @@ onUnmounted(() => {
             type="button"
             class="sorts__item"
             :class="{ 'is-active': sortKey === s.key }"
-            @click="sortKey = s.key"
+            @click="selectSort(s.key)"
           >
             {{ s.label }}
           </button>
@@ -718,7 +716,7 @@ onUnmounted(() => {
                 type="button"
                 class="pill"
                 :class="{ 'is-active': sortKey === s.key }"
-                @click="sortKey = s.key"
+                @click="selectSort(s.key)"
               >
                 {{ s.label }}
               </button>

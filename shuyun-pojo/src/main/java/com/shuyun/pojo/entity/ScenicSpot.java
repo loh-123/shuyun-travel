@@ -79,6 +79,10 @@ public class ScenicSpot implements Serializable {
     @TableField("tags")
     private String tags;
 
+    /** 浏览次数（人气） */
+    @TableField("view_count")
+    private Integer viewCount;
+
     /** 创建时间 */
     @TableField("create_time")
     private LocalDateTime createTime;

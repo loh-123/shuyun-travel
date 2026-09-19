@@ -37,12 +37,16 @@ public class ScenicServiceImpl extends ServiceImpl<ScenicSpotMapper, ScenicSpot>
     /** 同城推荐数量 */
     private static final int RECOMMEND_SIZE = 3;
 
+    /** 排序值：人气（按浏览次数） */
+    private static final String SORT_HOT = "hot";
+
     private final CityMapper cityMapper;
 
     private final ScenicImageMapper scenicImageMapper;
 
     @Override
-    public PageResult<ScenicSpotVO> pageScenic(int page, int size, Long cityId, String type, String keyword) {
+    public PageResult<ScenicSpotVO> pageScenic(int page, int size, Long cityId, String type, String keyword,
+                                               String sort) {
         LambdaQueryWrapper<ScenicSpot> wrapper = Wrappers.lambdaQuery();
         wrapper.eq(cityId != null, ScenicSpot::getCityId, cityId)
                 .eq(StringUtils.hasText(type), ScenicSpot::getType, type);
@@ -51,7 +55,12 @@ public class ScenicServiceImpl extends ServiceImpl<ScenicSpotMapper, ScenicSpot>
                     .or()
                     .like(ScenicSpot::getTags, keyword));
         }
-        wrapper.orderByDesc(ScenicSpot::getScore);
+        // 排序：hot = 人气（浏览量）优先；default/score = 评分优先，人气次之
+        if (SORT_HOT.equalsIgnoreCase(sort)) {
+            wrapper.orderByDesc(ScenicSpot::getViewCount).orderByDesc(ScenicSpot::getScore);
+        } else {
+            wrapper.orderByDesc(ScenicSpot::getScore).orderByDesc(ScenicSpot::getViewCount);
+        }
 
         Page<ScenicSpot> result = page(new Page<>(page, size), wrapper);
         Map<Long, String> cityNames = cityNameMap();
@@ -68,8 +77,15 @@ public class ScenicServiceImpl extends ServiceImpl<ScenicSpotMapper, ScenicSpot>
             throw new BusinessException("景点不存在");
         }
 
+        // 浏览即累加人气：用 SQL 原子自增，避免并发下丢更新
+        update(Wrappers.<ScenicSpot>lambdaUpdate()
+                .setSql("view_count = view_count + 1")
+                .eq(ScenicSpot::getId, id));
+
         ScenicDetailVO vo = new ScenicDetailVO();
         BeanUtils.copyProperties(spot, vo);
+        // 返回给前端的浏览量已包含刚刚这一次
+        vo.setViewCount((spot.getViewCount() == null ? 0 : spot.getViewCount()) + 1);
         City city = spot.getCityId() == null ? null : cityMapper.selectById(spot.getCityId());
         vo.setCityName(city == null ? null : city.getName());
 

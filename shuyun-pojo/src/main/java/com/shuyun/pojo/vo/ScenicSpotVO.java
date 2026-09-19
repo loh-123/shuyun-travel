@@ -37,6 +37,9 @@ public class ScenicSpotVO implements Serializable {
     /** 评分 */
     private BigDecimal score;
 
+    /** 浏览次数（人气） */
+    private Integer viewCount;
+
     /** 标签 */
     private String tags;
 }

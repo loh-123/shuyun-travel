@@ -64,6 +64,7 @@ CREATE TABLE IF NOT EXISTS `scenic_spot` (
     `ticket_info` VARCHAR(255)           DEFAULT NULL    COMMENT '门票信息',
     `score`       DECIMAL(3, 1)          DEFAULT 5.0     COMMENT '评分',
     `tags`        VARCHAR(255)           DEFAULT NULL    COMMENT '标签（逗号分隔）',
+    `view_count`  INT                    DEFAULT 0       COMMENT '浏览次数（人气）',
     `create_time` DATETIME               DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` DATETIME               DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     `deleted`     TINYINT                DEFAULT 0       COMMENT '逻辑删除：0-未删除，1-已删除',
@@ -285,3 +286,68 @@ UPDATE `scenic_spot` SET `address` = '四川省成都市大邑县西岭镇', `op
 UPDATE `scenic_spot` SET `address` = '四川省成都市都江堰市青城山镇', `open_time` = '08:00-18:00', `ticket_info` = '80 元', `longitude` = 103.568000, `latitude` = 30.902000 WHERE `id` = 8;
 UPDATE `scenic_spot` SET `address` = '四川省成都市武侯区武侯祠大街 231 号', `open_time` = '08:00-20:00', `ticket_info` = '50 元', `longitude` = 104.048000, `latitude` = 30.645000 WHERE `id` = 9;
 UPDATE `scenic_spot` SET `address` = '四川省成都市青羊区青华路 37 号', `open_time` = '08:00-18:30', `ticket_info` = '50 元', `longitude` = 104.030000, `latitude` = 30.665000 WHERE `id` = 10;
+
+-- 10. 新增人气字段 view_count（仅首次执行时新增列，已存在则跳过）
+SET @has_col := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'scenic_spot' AND COLUMN_NAME = 'view_count');
+SET @ddl := IF(@has_col = 0,
+               'ALTER TABLE `scenic_spot` ADD COLUMN `view_count` INT NOT NULL DEFAULT 0 COMMENT ''浏览次数（人气）'' AFTER `tags`',
+               'SELECT 1');
+PREPARE stmt FROM @ddl;
+EXECUTE stmt;
+DEALLOCATE PREPARE stmt;
+
+-- 11. 原 10 个景点的人气初始化（可重复执行）
+UPDATE `scenic_spot` SET `view_count` = 1860 WHERE `id` = 1;
+UPDATE `scenic_spot` SET `view_count` = 1350 WHERE `id` = 2;
+UPDATE `scenic_spot` SET `view_count` = 1480 WHERE `id` = 3;
+UPDATE `scenic_spot` SET `view_count` = 1210 WHERE `id` = 4;
+UPDATE `scenic_spot` SET `view_count` = 1120 WHERE `id` = 5;
+UPDATE `scenic_spot` SET `view_count` = 1620 WHERE `id` = 6;
+UPDATE `scenic_spot` SET `view_count` = 760  WHERE `id` = 7;
+UPDATE `scenic_spot` SET `view_count` = 980  WHERE `id` = 8;
+UPDATE `scenic_spot` SET `view_count` = 870  WHERE `id` = 9;
+UPDATE `scenic_spot` SET `view_count` = 690  WHERE `id` = 10;
+
+-- 12. 扩充景点：红色旅游 / 亲子 / 古镇（把类型从 3 类扩到 6 类）
+INSERT IGNORE INTO `scenic_spot`
+(`id`, `name`, `city_id`, `type`, `level`, `address`, `longitude`, `latitude`, `cover_image`, `description`, `open_time`, `ticket_info`, `score`, `tags`, `view_count`) VALUES
+(11, '泸定桥',   20, '红色旅游', '4A', '四川省甘孜州泸定县泸桥镇',     102.234000, 29.914000, 'https://picsum.photos/seed/shuyun-scenic-11/800/600', '康熙年间建成的铁索桥，因红军飞夺泸定桥而载入史册，十三根铁链横跨大渡河。', '08:00-18:00', '10 元', 4.6, '红色旅游,长征,铁索桥', 1420),
+(12, '邓小平故里', 14, '红色旅游', '5A', '四川省广安市广安区协兴镇',     106.630000, 30.540000, 'https://picsum.photos/seed/shuyun-scenic-12/800/600', '邓小平同志出生地，保存完好的川东民居与陈列馆，是重要的爱国主义教育基地。', '08:30-17:30', '免费', 4.8, '红色旅游,名人故里,爱国教育', 980),
+(13, '川陕革命根据地红军烈士陵园', 17, '红色旅游', '4A', '四川省巴中市通江县沙溪镇', 107.245000, 32.115000, 'https://picsum.photos/seed/shuyun-scenic-13/800/600', '全国最大的红军烈士陵园，依山而建的墓碑群安静而震撼，是川陕苏区的历史见证。', '09:00-17:00', '免费', 4.5, '红色旅游,烈士陵园,爱国教育', 460),
+(14, '成都大熊猫繁育研究基地', 1, '亲子', '5A', '四川省成都市成华区熊猫大道 1375 号', 104.150000, 30.735000, 'https://picsum.photos/seed/shuyun-scenic-14/800/600', '离城市最近的大熊猫家园，清晨可以看到熊猫进食与爬树，亲子出行首选。', '07:30-18:00', '55 元', 4.8, '亲子,大熊猫,科普', 1980),
+(15, '成都海昌极地海洋公园', 1, '亲子', '4A', '四川省成都市天府新区海洋路 68 号', 104.070000, 30.500000, 'https://picsum.photos/seed/shuyun-scenic-15/800/600', '极地动物与海洋生物主题乐园，白鲸、企鹅与海豚表演适合带小朋友花上一整天。', '09:00-18:00', '230 元', 4.5, '亲子,海洋馆,表演', 890),
+(16, '国色天乡乐园', 1, '亲子', '4A', '四川省成都市温江区万春镇',   103.850000, 30.720000, 'https://picsum.photos/seed/shuyun-scenic-16/800/600', '成都近郊的综合性主题乐园，游乐设施与季节花海兼顾，周末亲子出游的热门去处。', '09:30-18:00', '180 元', 4.4, '亲子,乐园,游乐设施', 720),
+(17, '阆中古城',   11, '古镇', '5A', '四川省南充市阆中市阆水中路',    106.005000, 31.558000, 'https://picsum.photos/seed/shuyun-scenic-17/800/600', '中国四大古城之一，风水格局完整，张飞庙、贡院与青瓦老街保留着明清气韵。', '08:30-18:00', '古城免费（景点联票 100 元）', 4.7, '古镇,古城,风水', 1330),
+(18, '黄龙溪古镇', 1, '古镇', '4A', '四川省成都市双流区黄龙溪镇',    103.970000, 30.320000, 'https://picsum.photos/seed/shuyun-scenic-18/800/600', '川西水乡古镇，一条清溪穿镇而过，夏可戏水、冬可喝茶，小吃街热闹非常。', '全天开放', '免费', 4.5, '古镇,水乡,小吃', 1150),
+(19, '李庄古镇',   13, '古镇', '4A', '四川省宜宾市翠屏区李庄镇',     104.790000, 28.785000, 'https://picsum.photos/seed/shuyun-scenic-19/800/600', '长江边的千年古镇，抗战时期同济大学西迁于此，李庄白肉与古建群是它的名片。', '全天开放', '免费', 4.6, '古镇,抗战文化,李庄白肉', 640);
+
+-- 13. 新增景点的画廊图（每景点 3 张）
+INSERT IGNORE INTO `scenic_image` (`id`, `scenic_id`, `image_url`, `sort_order`) VALUES
+(31, 11, 'https://picsum.photos/seed/shuyun-s11-a/1200/800', 0),
+(32, 11, 'https://picsum.photos/seed/shuyun-s11-b/1200/800', 1),
+(33, 11, 'https://picsum.photos/seed/shuyun-s11-c/1200/800', 2),
+(34, 12, 'https://picsum.photos/seed/shuyun-s12-a/1200/800', 0),
+(35, 12, 'https://picsum.photos/seed/shuyun-s12-b/1200/800', 1),
+(36, 12, 'https://picsum.photos/seed/shuyun-s12-c/1200/800', 2),
+(37, 13, 'https://picsum.photos/seed/shuyun-s13-a/1200/800', 0),
+(38, 13, 'https://picsum.photos/seed/shuyun-s13-b/1200/800', 1),
+(39, 13, 'https://picsum.photos/seed/shuyun-s13-c/1200/800', 2),
+(40, 14, 'https://picsum.photos/seed/shuyun-s14-a/1200/800', 0),
+(41, 14, 'https://picsum.photos/seed/shuyun-s14-b/1200/800', 1),
+(42, 14, 'https://picsum.photos/seed/shuyun-s14-c/1200/800', 2),
+(43, 15, 'https://picsum.photos/seed/shuyun-s15-a/1200/800', 0),
+(44, 15, 'https://picsum.photos/seed/shuyun-s15-b/1200/800', 1),
+(45, 15, 'https://picsum.photos/seed/shuyun-s15-c/1200/800', 2),
+(46, 16, 'https://picsum.photos/seed/shuyun-s16-a/1200/800', 0),
+(47, 16, 'https://picsum.photos/seed/shuyun-s16-b/1200/800', 1),
+(48, 16, 'https://picsum.photos/seed/shuyun-s16-c/1200/800', 2),
+(49, 17, 'https://picsum.photos/seed/shuyun-s17-a/1200/800', 0),
+(50, 17, 'https://picsum.photos/seed/shuyun-s17-b/1200/800', 1),
+(51, 17, 'https://picsum.photos/seed/shuyun-s17-c/1200/800', 2),
+(52, 18, 'https://picsum.photos/seed/shuyun-s18-a/1200/800', 0),
+(53, 18, 'https://picsum.photos/seed/shuyun-s18-b/1200/800', 1),
+(54, 18, 'https://picsum.photos/seed/shuyun-s18-c/1200/800', 2),
+(55, 19, 'https://picsum.photos/seed/shuyun-s19-a/1200/800', 0),
+(56, 19, 'https://picsum.photos/seed/shuyun-s19-b/1200/800', 1),
+(57, 19, 'https://picsum.photos/seed/shuyun-s19-c/1200/800', 2);

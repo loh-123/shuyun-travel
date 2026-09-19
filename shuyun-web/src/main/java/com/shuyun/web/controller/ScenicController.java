@@ -33,6 +33,7 @@ public class ScenicController {
      * @param cityId  市州ID（可选）
      * @param type    景点类型（可选）
      * @param keyword 关键词（可选）
+     * @param sort    排序：default/综合、score/评分、hot/人气（可选）
      * @return 分页结果
      */
     @GetMapping("/scenic/list")
@@ -41,8 +42,9 @@ public class ScenicController {
             @RequestParam(defaultValue = "10") Integer size,
             @RequestParam(required = false) Long cityId,
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) String keyword) {
-        return Result.ok(scenicService.pageScenic(page, size, cityId, type, keyword));
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "default") String sort) {
+        return Result.ok(scenicService.pageScenic(page, size, cityId, type, keyword, sort));
     }
 
     /**

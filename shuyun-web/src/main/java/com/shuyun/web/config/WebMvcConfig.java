@@ -10,7 +10,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Web MVC 配置
  *
  * <p>注册 {@link JwtInterceptor}：拦截 /api/**，放行登录、注册、健康检查，
- * 以及景点 / 市州 / 文化等公开浏览接口。</p>
+ * 以及景点 / 市州 / 文化 / 天气等公开浏览接口。</p>
  */
 @Configuration
 @RequiredArgsConstructor
@@ -28,6 +28,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/health",
                         "/api/scenic/**",
                         "/api/city/**",
-                        "/api/culture/**");
+                        "/api/culture/**",
+                        "/api/weather");
     }
 }
