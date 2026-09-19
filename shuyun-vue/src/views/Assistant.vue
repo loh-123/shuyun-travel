@@ -302,9 +302,9 @@ onMounted(loadRecommend)
   gap: 14px;
   padding: clamp(14px, 1.4vw, 20px);
   border: 1px solid rgba(201, 168, 106, 0.42);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
   overflow-y: auto;
 }
 
@@ -325,8 +325,8 @@ onMounted(loadRecommend)
     border-radius: 10px;
     cursor: pointer;
     transition:
-      background-color $dur-fast $ease-out-expo,
-      transform $dur-fast $ease-out-expo;
+      background-color $duration-fast $ease-out-expo,
+      transform $duration-fast $ease-out-expo;
 
     &:hover {
       background: rgba(140, 31, 40, 0.07);
@@ -364,9 +364,9 @@ onMounted(loadRecommend)
   flex-direction: column;
   overflow: hidden;
   border: 1px solid rgba(201, 168, 106, 0.42);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.74);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
 }
 
 .chat__head {
@@ -469,9 +469,9 @@ onMounted(loadRecommend)
 .panel {
   padding: clamp(14px, 1.4vw, 20px);
   border: 1px solid rgba(201, 168, 106, 0.42);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
 
   &__title {
     position: relative;
@@ -517,7 +517,7 @@ onMounted(loadRecommend)
 
   &__reco {
     cursor: pointer;
-    transition: color $dur-fast $ease-out-expo;
+    transition: color $duration-fast $ease-out-expo;
 
     &:hover {
       color: $color-primary;

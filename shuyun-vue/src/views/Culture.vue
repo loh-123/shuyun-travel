@@ -259,10 +259,10 @@ onMounted(loadList)
   letter-spacing: 0.12em;
   color: $color-text-dark;
   transition:
-    background-color $dur-base $ease-out-expo,
-    color $dur-base $ease-out-expo,
-    border-color $dur-base $ease-out-expo,
-    transform $dur-base $ease-out-expo;
+    background-color $duration-normal $ease-out-expo,
+    color $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo,
+    transform $duration-normal $ease-out-expo;
 
   &:hover {
     border-color: $color-gold;
@@ -289,20 +289,20 @@ onMounted(loadList)
   display: flex;
   flex-direction: column;
   border: 1px solid rgba(201, 168, 106, 0.4);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
   overflow: hidden;
   cursor: pointer;
   transition:
-    transform $dur-base $ease-out-expo,
-    box-shadow $dur-base $ease-out-expo,
-    border-color $dur-base $ease-out-expo;
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo;
   will-change: transform;
 
   &:hover {
     transform: translateY(-8px) scale(1.02);
-    box-shadow: $shadow-card-hover;
+    box-shadow: $shadow-lg;
     border-color: $color-gold;
 
     .ccard__cover img {
@@ -356,7 +356,7 @@ onMounted(loadList)
   font-size: clamp(20px, 1.8vw, 26px);
   letter-spacing: 0.08em;
   color: $color-text-dark;
-  transition: color $dur-base $ease-out-expo;
+  transition: color $duration-normal $ease-out-expo;
 }
 
 .ccard__summary {

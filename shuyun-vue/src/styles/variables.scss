@@ -1,68 +1,99 @@
 // ============================================================
-// 设计变量：颜色 / 字体 / 间距 / 字号 / 动效 / 层级
-// 所有颜色、字体、间距都收敛在这里，组件里直接 @use 使用
+// 设计令牌（Design Tokens）
+// 全站唯一的样式变量来源：颜色 / 字体 / 字号 / 间距 / 圆角 / 阴影 / 动效 / 层级
+// 组件内用法：@use '@/styles/variables' as *;
 // ============================================================
 
-// 字体栈来自 fonts.scss，统一对外暴露（组件只需 @use variables 即可）
+// 字体栈来自 fonts.scss，统一对外暴露
 @forward './fonts';
 
-// ---------- 颜色 ----------
+// ------------------------------------------------------------
+// 1. 颜色
+// ------------------------------------------------------------
 $color-primary: #8c1f28; // 蜀锦红
 $color-ink: #0e2a47; // 青城墨蓝
 $color-gold: #c9a86a; // 金沙金
 $color-paper: #e8e3d8; // 宣纸米
 $color-bamboo: #3a5a40; // 竹青
-$color-text-light: #f5f1e8; // 亮色文字（深底）
-$color-text-dark: #1a1a1a; // 暗色文字（浅底，不用纯黑）
+$color-text-light: #f5f1e8; // 亮色文字（深底上用）
+$color-text-dark: #1a1a1a; // 暗色文字（浅底上用，不用纯黑）
 $color-white: #fff;
 
-// ---------- 派生半透明色 ----------
+// 派生：遮罩 / 半透明 / 描边
 $color-overlay-strong: rgba(14, 42, 71, 0.75);
 $color-overlay-soft: rgba(14, 42, 71, 0.35);
 $color-scrim: rgba(20, 16, 14, 0.45);
 $color-gold-soft: rgba(201, 168, 106, 0.15);
 $color-gold-line: rgba(201, 168, 106, 0.55);
+$color-border-gold: rgba(201, 168, 106, 0.42); // 面板标准描边
+$color-border-gold-light: rgba(201, 168, 106, 0.3);
 $color-primary-soft: rgba(140, 31, 40, 0.08);
 $color-paper-glass: rgba(232, 227, 216, 0.72);
+$color-glass: rgba(255, 255, 255, 0.62); // 面板毛玻璃底色
 
-// ---------- 文字阴影（深底可读性）----------
-$shadow-text: 0 2px 24px rgba(0, 0, 0, 0.5);
-$shadow-text-soft: 0 1px 12px rgba(0, 0, 0, 0.35);
+// ------------------------------------------------------------
+// 2. 字体（字号全部用 clamp 做流体排版）
+// ------------------------------------------------------------
+$fs-hero: clamp(72px, 10vw, 200px); // 首屏主标题
+$fs-h1: clamp(36px, 5vw, 80px); // 页面 / 区块大标题
+$fs-h2: clamp(26px, 3vw, 44px); // 二级标题
+$fs-h3: clamp(20px, 2.2vw, 34px); // 三级标题
+$fs-body: clamp(15px, 1.2vw, 20px); // 正文
+$fs-small: clamp(12px, 0.9vw, 15px); // 辅助文字
+// 补充令牌
+$fs-num: clamp(40px, 6vw, 96px); // 数据概览数字
+$fs-eyebrow: clamp(12px, 1vw, 16px); // 英文小标签
 
-// ---------- 卡片阴影 ----------
-$shadow-card: 0 8px 20px rgba(0, 0, 0, 0.1);
-$shadow-card-hover: 0 20px 40px rgba(0, 0, 0, 0.2);
-$shadow-seal: 0 6px 24px rgba(140, 31, 40, 0.32);
+// ------------------------------------------------------------
+// 3. 间距
+// ------------------------------------------------------------
+$space-xs: clamp(8px, 0.8vw, 12px);
+$space-sm: clamp(12px, 1.4vw, 20px);
+$space-md: clamp(20px, 2.4vw, 40px);
+$space-lg: clamp(32px, 4vw, 72px);
+$space-xl: clamp(48px, 6vw, 120px);
+$space-xxl: clamp(64px, 8vw, 160px);
+$gutter: clamp(24px, 5vw, 120px); // 内容区左右留白
 
-// ---------- 圆角 ----------
+// ------------------------------------------------------------
+// 4. 圆角
+// ------------------------------------------------------------
 $radius-sm: 6px;
-$radius-card: 16px;
+$radius-md: 10px;
+$radius-lg: 16px;
 $radius-pill: 999px;
 
-// ---------- 流体间距 ----------
-$gutter: clamp(24px, 5vw, 120px); // 内容区左右留白（大屏留白更多）
-$gap-xl: clamp(48px, 6vw, 120px);
-$gap-lg: clamp(32px, 4vw, 72px);
-$gap-md: clamp(20px, 2.4vw, 40px);
-$gap-sm: clamp(12px, 1.4vw, 20px);
+// ------------------------------------------------------------
+// 5. 阴影
+// ------------------------------------------------------------
+$shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.08);
+$shadow-md: 0 8px 20px rgba(0, 0, 0, 0.1);
+$shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.2);
+$shadow-seal: 0 6px 24px rgba(140, 31, 40, 0.32); // 印章 / 品牌红投影
+$shadow-text: 0 2px 24px rgba(0, 0, 0, 0.5); // 深底文字可读性
+$shadow-text-soft: 0 1px 12px rgba(0, 0, 0, 0.35);
 
-// ---------- 流体字号 ----------
-$fs-hero: clamp(72px, 10vw, 200px); // 首屏主标题
-$fs-h2: clamp(36px, 5vw, 80px); // 每个 section 标题
-$fs-h3: clamp(20px, 2.2vw, 34px);
-$fs-num: clamp(40px, 6vw, 96px); // 数据概览数字
-$fs-body: clamp(15px, 1.2vw, 20px);
-$fs-small: clamp(12px, 0.9vw, 15px);
-$fs-eyebrow: clamp(12px, 1vw, 16px);
-
-// ---------- 动效 ----------
+// ------------------------------------------------------------
+// 6. 动效
+// ------------------------------------------------------------
 $ease-out-expo: cubic-bezier(0.22, 1, 0.36, 1);
-$ease-in-out-soft: cubic-bezier(0.4, 0, 0.2, 1);
-$dur-fast: 0.3s;
-$dur-base: 0.6s;
-$dur-slow: 1s;
+$ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+$duration-fast: 0.3s;
+$duration-normal: 0.6s;
+$duration-slow: 1s;
 
-// ---------- 层级 ----------
+// ------------------------------------------------------------
+// 8. 可复用纹理（蜀锦纹样 / 微噪点）
+// ------------------------------------------------------------
+$pattern-brocade:
+  repeating-linear-gradient(45deg, #{$color-gold} 0 1px, transparent 1px 14px),
+  repeating-linear-gradient(-45deg, #{$color-gold} 0 1px, transparent 1px 14px);
+
+$pattern-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+
+// ------------------------------------------------------------
+// 9. 层级
+// ------------------------------------------------------------
 $z-bg: 0;
 $z-content: 2;
 $z-header: 100;

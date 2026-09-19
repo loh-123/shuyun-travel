@@ -265,7 +265,7 @@ onMounted(() => {
   font-size: $fs-small;
   letter-spacing: 0.16em;
   color: rgba(245, 241, 232, 0.82);
-  transition: color $dur-base $ease-out-expo;
+  transition: color $duration-normal $ease-out-expo;
 
   &:hover {
     color: $color-gold;
@@ -352,8 +352,8 @@ onMounted(() => {
 
   video {
     width: 100%;
-    border-radius: $radius-card;
-    box-shadow: $shadow-card;
+    border-radius: $radius-lg;
+    box-shadow: $shadow-md;
   }
 }
 
@@ -373,12 +373,12 @@ onMounted(() => {
   gap: 6px;
   padding: 14px 18px;
   border: 1px solid rgba(140, 31, 40, 0.18);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.5);
   text-align: left;
   transition:
-    border-color $dur-base $ease-out-expo,
-    transform $dur-base $ease-out-expo;
+    border-color $duration-normal $ease-out-expo,
+    transform $duration-normal $ease-out-expo;
 
   &:hover:not(:disabled) {
     border-color: $color-gold;
@@ -419,9 +419,9 @@ onMounted(() => {
 .cdetail__panel {
   padding: clamp(18px, 2vw, 26px);
   border: 1px solid rgba(201, 168, 106, 0.44);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.6);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
 }
 
 .cdetail__list {
@@ -436,7 +436,7 @@ onMounted(() => {
     padding: 11px 0;
     border-bottom: 1px dashed rgba(140, 31, 40, 0.14);
     cursor: pointer;
-    transition: color $dur-fast $ease-out-expo;
+    transition: color $duration-fast $ease-out-expo;
 
     &:last-child {
       border-bottom: none;

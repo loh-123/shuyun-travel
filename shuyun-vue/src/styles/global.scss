@@ -6,11 +6,9 @@
 // ============================================================
 @use 'sass:color';
 @use './variables' as *;
+@use './mixins' as *;
 
-// ---------- 蜀锦纹理 / 噪点（可复用的工具样式） ----------
-$pattern-brocade: repeating-linear-gradient(45deg, #{$color-gold} 0 1px, transparent 1px 14px),
-  repeating-linear-gradient(-45deg, #{$color-gold} 0 1px, transparent 1px 14px);
-$pattern-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+// 蜀锦纹理 / 噪点的变量定义已移到 variables.scss（$pattern-brocade / $pattern-noise）
 
 // ---------- CSS 自定义属性（兼容旧页面 + 供 JS 读取） ----------
 :root {
@@ -50,7 +48,7 @@ $pattern-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg
   --el-input-text-color: #{$color-text-dark};
 
   --el-font-family: #{$font-body};
-  --el-box-shadow-light: #{$shadow-card};
+  --el-box-shadow-light: #{$shadow-md};
 }
 
 // ---------- reset ----------
@@ -95,6 +93,12 @@ h6 {
   line-height: 1;
 }
 
+// ---------- 选中文字 ----------
+::selection {
+  background: $color-primary;
+  color: $color-text-light;
+}
+
 a {
   color: inherit;
   text-decoration: none;
@@ -129,28 +133,28 @@ select {
   outline: none;
 }
 
-// ---------- 滚动条美化 ----------
+// ---------- 滚动条美化（细金色） ----------
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(140, 31, 40, 0.06);
+  background: rgba(201, 168, 106, 0.08);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(140, 31, 40, 0.35);
+  background: rgba(201, 168, 106, 0.55);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(140, 31, 40, 0.55);
+  background: rgba(201, 168, 106, 0.85);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(140, 31, 40, 0.35) rgba(140, 31, 40, 0.06);
+  scrollbar-color: rgba(201, 168, 106, 0.55) rgba(201, 168, 106, 0.08);
 }
 
 // ---------- 自定义光标 ----------
@@ -201,7 +205,7 @@ textarea,
 // 段落标题
 .sy-title {
   font-family: $font-title;
-  font-size: $fs-h2;
+  font-size: $fs-h1;
   font-weight: 900;
   line-height: 1.05;
   letter-spacing: 0.04em;
@@ -240,9 +244,9 @@ textarea,
   font-size: $fs-small;
   letter-spacing: 0.22em;
   transition:
-    background-color $dur-base $ease-out-expo,
-    color $dur-base $ease-out-expo,
-    box-shadow $dur-base $ease-out-expo;
+    background-color $duration-normal $ease-out-expo,
+    color $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo;
 
   &:hover {
     background-color: $color-gold;
@@ -269,7 +273,7 @@ textarea,
     background: $color-gold;
     transform: scaleX(0);
     transform-origin: left;
-    transition: transform $dur-base $ease-out-expo;
+    transition: transform $duration-normal $ease-out-expo;
   }
 
   &:hover::after {
@@ -325,7 +329,7 @@ textarea,
   margin-top: 12px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: $fs-h2;
+  font-size: $fs-h1;
   line-height: 1.1;
   letter-spacing: 0.1em;
   color: $color-primary;
@@ -343,22 +347,30 @@ textarea,
 // 面板：金色细边 + 半透明
 .sy-panel {
   border: 1px solid rgba(201, 168, 106, 0.42);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.6);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
 }
 
-// 悬浮抬升（卡片统一动效）
+// 面板：可叠加毛玻璃版
+.sy-panel--glass {
+  @include glass;
+}
+
+// 省略号工具
+.sy-ellipsis {
+  @include text-ellipsis(1);
+}
+
+.sy-ellipsis-2 {
+  @include text-ellipsis(2);
+}
+
+// 悬浮抬升（卡片统一动效，复用 hover-lift mixin）
 .sy-hover-lift {
-  transition:
-    transform $dur-base $ease-out-expo,
-    box-shadow $dur-base $ease-out-expo,
-    border-color $dur-base $ease-out-expo;
-  will-change: transform;
+  @include hover-lift;
 
   &:hover {
-    transform: translateY(-8px) scale(1.02);
-    box-shadow: $shadow-card-hover;
     border-color: $color-gold;
   }
 }
@@ -383,7 +395,7 @@ textarea,
 
 .el-card,
 .el-dialog {
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
 }
 
 .el-dialog__title {

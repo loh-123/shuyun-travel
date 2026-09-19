@@ -547,13 +547,13 @@ onMounted(() => {
   align-items: center;
   gap: clamp(16px, 2vw, 26px);
   padding: clamp(20px, 2.6vw, 36px) clamp(20px, 2.8vw, 44px);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   overflow: hidden;
   // 墨蓝 → 金调，与首页/AI 屏同源
   background:
     radial-gradient(120% 160% at 88% 0%, rgba(201, 168, 106, 0.28) 0%, rgba(14, 42, 71, 0) 60%),
     linear-gradient(120deg, $color-ink 0%, #16324f 55%, #1d2436 100%);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
 
   // 蜀锦纹样
   &::before {
@@ -617,9 +617,9 @@ onMounted(() => {
   gap: 6px;
   padding: 14px;
   border: 1px solid rgba(201, 168, 106, 0.42);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
   align-self: start;
 
   &__item {
@@ -631,9 +631,9 @@ onMounted(() => {
     color: rgba(26, 26, 26, 0.78);
     cursor: pointer;
     transition:
-      background-color $dur-fast $ease-out-expo,
-      color $dur-fast $ease-out-expo,
-      transform $dur-fast $ease-out-expo;
+      background-color $duration-fast $ease-out-expo,
+      color $duration-fast $ease-out-expo,
+      transform $duration-fast $ease-out-expo;
 
     &:hover {
       background: rgba(140, 31, 40, 0.07);
@@ -692,19 +692,19 @@ onMounted(() => {
 .card {
   overflow: hidden;
   border: 1px solid rgba(201, 168, 106, 0.4);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
   cursor: pointer;
   transition:
-    transform $dur-base $ease-out-expo,
-    box-shadow $dur-base $ease-out-expo,
-    border-color $dur-base $ease-out-expo;
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo;
   will-change: transform;
 
   &:hover {
     transform: translateY(-8px) scale(1.02);
-    box-shadow: $shadow-card-hover;
+    box-shadow: $shadow-lg;
     border-color: $color-gold;
 
     .card__img {
@@ -743,8 +743,8 @@ onMounted(() => {
     backdrop-filter: blur(6px);
     opacity: 0;
     transition:
-      opacity $dur-fast $ease-out-expo,
-      background-color $dur-fast $ease-out-expo;
+      opacity $duration-fast $ease-out-expo,
+      background-color $duration-fast $ease-out-expo;
 
     &:hover {
       background: $color-primary;
@@ -859,17 +859,17 @@ onMounted(() => {
 .trip {
   padding: clamp(16px, 1.8vw, 26px);
   border: 1px solid rgba(201, 168, 106, 0.4);
-  border-radius: $radius-card;
+  border-radius: $radius-lg;
   background: rgba(255, 255, 255, 0.66);
-  box-shadow: $shadow-card;
+  box-shadow: $shadow-md;
   transition:
-    transform $dur-base $ease-out-expo,
-    box-shadow $dur-base $ease-out-expo,
-    border-color $dur-base $ease-out-expo;
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo;
 
   &:hover {
     transform: translateY(-4px);
-    box-shadow: $shadow-card-hover;
+    box-shadow: $shadow-lg;
     border-color: $color-gold;
   }
 

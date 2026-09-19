@@ -4,17 +4,15 @@
  * - Swiper 全屏淡入淡出轮播（春都江堰 / 夏九寨 / 秋稻城 / 冬西岭）
  * - 左侧大号季节字（金色描边），底部季节切换按钮与轮播联动
  */
-import { onMounted, onUnmounted, ref } from 'vue'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
+import { onMounted, ref } from 'vue'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Autoplay, EffectFade, Navigation, Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/effect-fade'
 import 'swiper/css/navigation'
 import 'swiper/css/pagination'
-
-gsap.registerPlugin(ScrollTrigger)
+import SectionTitle from '@/components/common/SectionTitle.vue'
+import { useScrollReveal } from '@/composables/useScrollReveal'
 
 const swiperModules = [Autoplay, EffectFade, Navigation, Pagination]
 
@@ -84,7 +82,8 @@ function announceBg(index: number) {
   emit('bg-change', { src: item.img, src2x: item.img2x })
 }
 
-let ctx: gsap.Context | null = null
+// 入场动画（与原实现参数一致）
+useScrollReveal(rootEl, '.season__animate', { y: 40, stagger: 0.1, start: 'top 62%' })
 
 function onSwiper(swiper: unknown) {
   swiperRef = swiper
@@ -99,29 +98,8 @@ function goTo(index: number) {
   swiperRef?.slideTo?.(index)
 }
 
-onMounted(() => {
-  const root = rootEl.value
-  if (!root) {
-    return
-  }
-  // 首屏即上报一次，避免舞台在进入本屏前没有对应背景
-  announceBg(0)
-  ctx = gsap.context(() => {
-    gsap.from('.season__animate', {
-      y: 40,
-      opacity: 0,
-      duration: 1,
-      ease: 'power3.out',
-      stagger: 0.1,
-      scrollTrigger: { trigger: root, start: 'top 62%', once: true },
-    })
-  }, root)
-  ScrollTrigger.refresh()
-})
-
-onUnmounted(() => {
-  ctx?.revert()
-})
+// 首屏即上报一次，避免舞台在进入本屏前没有对应背景
+onMounted(() => announceBg(0))
 </script>
 
 <template>
@@ -149,7 +127,7 @@ onUnmounted(() => {
 
     <!-- 文字层 -->
     <div class="sy-container season__inner">
-      <p class="sy-eyebrow season__animate">Four Seasons</p>
+      <SectionTitle eyebrow="Four Seasons" animate-class="season__animate" />
 
       <div class="season__body">
         <div class="season__big season__animate">{{ SEASONS[activeIndex].season }}</div>
@@ -182,6 +160,7 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
+@use '@/styles/mixins' as *;
 
 .season {
   position: relative;
@@ -279,7 +258,7 @@ onUnmounted(() => {
   gap: 8px;
   padding-bottom: 4px;
   color: rgba(245, 241, 232, 0.72);
-  transition: color $dur-base $ease-out-expo;
+  transition: color $duration-normal $ease-out-expo;
 
   &:hover {
     color: $color-gold;
@@ -304,7 +283,7 @@ onUnmounted(() => {
 }
 
 /* ---------------- 响应式 ---------------- */
-@media (max-width: 768px) {
+@include responsive(md) {
   .season__body {
     flex-direction: column;
     align-items: flex-start;

@@ -4,16 +4,16 @@
  * - 5 个 100vh 分节（Lenis 平滑滚动 + lenis/snap 整屏吸附）
  * - fixed 背景舞台：5 层背景叠放，按当前屏交叉淡入（真正的「淡入淡出切换背景图」）
  * - 四季屏把当前轮播图上报给舞台，因此它的背景同样参与交叉淡入
- * - GSAP + ScrollTrigger 负责各分节进入动画；右侧指示器 / 鼠标光晕 / 蜀锦加载动画
+ * - 公共能力全部复用：useLenis（平滑滚动）/ ScrollIndicator（右侧指示器）/ Loading（加载动画）
  */
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import Lenis from 'lenis'
 import Snap from 'lenis/snap'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import 'lenis/dist/lenis.css'
 
-import CursorGlow from '@/components/common/CursorGlow.vue'
+import { initLenis, lenisScrollTo } from '@/composables/useLenis'
+import ScrollIndicator from '@/components/common/ScrollIndicator.vue'
+import Loading from '@/components/common/Loading.vue'
 import HeroSection from '@/components/home/HeroSection.vue'
 import DataSection from '@/components/home/DataSection.vue'
 import SeasonSection from '@/components/home/SeasonSection.vue'
@@ -58,7 +58,6 @@ interface StageLayer {
 }
 
 const rootEl = ref<HTMLElement | null>(null)
-const loaderEl = ref<HTMLElement | null>(null)
 
 /** 当前屏下标 */
 const activeIndex = ref(0)
@@ -90,22 +89,17 @@ const stageLayers = computed<StageLayer[]>(() => [
   { key: 'ai', src: IMG.ai, src2x: IMG.ai2x, tone: 'dark' },
 ])
 
-let lenis: Lenis | null = null
-let snap: Snap | null = null
-let ctx: gsap.Context | null = null
-let loaderTimer = 0
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let snap: any = null
+let sectionCtx: gsap.Context | null = null
 
-/** GSAP ticker 驱动 Lenis（官方推荐接法） */
-function tickerFn(time: number) {
-  lenis?.raf(time * 1000)
-}
-
+/** 点击右侧指示器跳转到第 index 屏 */
 function goTo(index: number) {
   activeIndex.value = index
   if (snap) {
     snap.goTo(index)
   } else {
-    lenis?.scrollTo(`#sec-${index}`, { duration: 1.2 })
+    lenisScrollTo(`#sec-${index}`, { duration: 1.2 })
   }
 }
 
@@ -121,15 +115,11 @@ onMounted(() => {
     return
   }
 
-  // ---------- 1. Lenis 平滑滚动 ----------
-  lenis = new Lenis({ duration: 1.1, smoothWheel: true })
-  lenis.on('scroll', ScrollTrigger.update)
-  gsap.ticker.add(tickerFn)
-  gsap.ticker.lagSmoothing(0)
-
+  // 平滑滚动单例（main.ts 已初始化，这里再取一次，保证单独打开本页也可用）
+  const lenis = initLenis()
   const sectionEls = Array.from(root.querySelectorAll<HTMLElement>('.home__section'))
 
-  // ---------- 2. 整屏吸附（吸收异常也不影响可用性）----------
+  // ---------- 整屏吸附（吸收异常也不影响可用性）----------
   if (SNAP_ENABLED && window.innerWidth > 900) {
     try {
       snap = new Snap(lenis, {
@@ -147,8 +137,8 @@ onMounted(() => {
     }
   }
 
-  // ---------- 3. 当前屏跟踪 ----------
-  ctx = gsap.context(() => {
+  // ---------- 当前屏跟踪 ----------
+  sectionCtx = gsap.context(() => {
     sectionEls.forEach((el, i) => {
       ScrollTrigger.create({
         trigger: el,
@@ -163,32 +153,12 @@ onMounted(() => {
     })
   }, root)
 
-  // ---------- 4. 加载动画结束 → 首屏入场 ----------
-  loaderTimer = window.setTimeout(() => {
-    heroActive.value = true
-    const loader = loaderEl.value
-    if (loader) {
-      gsap.to(loader, {
-        opacity: 0,
-        duration: 0.6,
-        ease: 'power2.out',
-        onComplete: () => {
-          loader.style.display = 'none'
-        },
-      })
-    }
-  }, LOADER_MS)
-
   ScrollTrigger.refresh()
 })
 
 onUnmounted(() => {
-  window.clearTimeout(loaderTimer)
-  gsap.ticker.remove(tickerFn)
-  ctx?.revert()
+  sectionCtx?.revert()
   snap?.destroy()
-  lenis?.destroy()
-  lenis = null
   snap = null
 })
 </script>
@@ -241,36 +211,17 @@ onUnmounted(() => {
       <AiSection />
     </section>
 
-    <!-- ================= 右侧滚动指示器 ================= -->
-    <nav class="home__dots" aria-label="分屏导航">
-      <button
-        v-for="(s, i) in sections"
-        :key="s.key"
-        class="home__dot"
-        :class="{ 'is-active': i === activeIndex }"
-        :aria-label="s.label"
-        @click="goTo(i)"
-      >
-        <span class="home__dot-label">{{ s.label }}</span>
-        <span class="home__dot-mark" />
-      </button>
-    </nav>
+    <!-- ================= 右侧滚动指示器（公共组件） ================= -->
+    <ScrollIndicator :items="sections" :active="activeIndex" @select="goTo" />
 
-    <!-- ================= 鼠标跟随光晕 ================= -->
-    <CursorGlow />
-
-    <!-- ================= 蜀锦纹样加载动画 ================= -->
-    <div ref="loaderEl" class="home__loader">
-      <div class="home__loader-mark">
-        <span class="home__loader-char">蜀</span>
-      </div>
-      <p class="home__loader-text">蜀韵 · 智游</p>
-    </div>
+    <!-- ================= 蜀锦纹样加载动画（公共组件） ================= -->
+    <Loading :duration="LOADER_MS" @finish="heroActive = true" />
   </div>
 </template>
 
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
+@use '@/styles/mixins' as *;
 
 .home {
   position: relative;
@@ -290,7 +241,7 @@ onUnmounted(() => {
   position: absolute;
   inset: 0;
   opacity: 0;
-  transition: opacity 1s $ease-in-out-soft;
+  transition: opacity 1s $ease-in-out;
   will-change: opacity;
 
   &.is-active {
@@ -337,133 +288,13 @@ onUnmounted(() => {
   overflow: hidden;
 }
 
-/* ---------------- 右侧指示器 ---------------- */
-.home__dots {
-  position: fixed;
-  top: 50%;
-  right: clamp(12px, 2vw, 40px);
-  z-index: $z-dots;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  transform: translateY(-50%);
-}
-
-.home__dot {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 2px 0;
-
-  &:hover .home__dot-label,
-  &.is-active .home__dot-label {
-    opacity: 1;
-    transform: translateX(0);
-  }
-
-  &:hover .home__dot-mark,
-  &.is-active .home__dot-mark {
-    background: $color-gold;
-    border-color: $color-gold;
-    transform: scale(1.35);
-  }
-}
-
-.home__dot-label {
-  font-family: $font-body;
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  white-space: nowrap;
-  color: $color-text-light;
-  text-shadow: $shadow-text-soft;
-  opacity: 0;
-  transform: translateX(8px);
-  transition:
-    opacity $dur-fast $ease-out-expo,
-    transform $dur-fast $ease-out-expo;
-}
-
-.home__dot-mark {
-  width: 8px;
-  height: 8px;
-  border: 1px solid rgba(201, 168, 106, 0.7);
-  border-radius: 50%;
-  background: transparent;
-  transition:
-    background-color $dur-fast $ease-out-expo,
-    transform $dur-base $ease-out-expo,
-    border-color $dur-fast $ease-out-expo;
-}
-
-/* ---------------- 加载动画 ---------------- */
-.home__loader {
-  position: fixed;
-  inset: 0;
-  z-index: $z-loader;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 22px;
-  background: $color-ink;
-}
-
-.home__loader-mark {
-  display: grid;
-  place-items: center;
-  width: clamp(84px, 9vw, 128px);
-  height: clamp(84px, 9vw, 128px);
-  border: 1px solid rgba(201, 168, 106, 0.6);
-  background-color: rgba(201, 168, 106, 0.06);
-  background-image:
-    repeating-linear-gradient(45deg, #{$color-gold} 0 1px, transparent 1px 12px),
-    repeating-linear-gradient(-45deg, #{$color-gold} 0 1px, transparent 1px 12px);
-  animation: loaderSpin 3.4s linear infinite;
-}
-
-.home__loader-char {
-  padding: 6px 10px;
-  font-family: $font-title;
-  font-weight: 900;
-  font-size: clamp(30px, 3.6vw, 48px);
-  color: $color-gold;
-  background: $color-ink;
-}
-
-.home__loader-text {
-  font-family: $font-title;
-  font-size: clamp(14px, 1.2vw, 18px);
-  letter-spacing: 0.5em;
-  color: rgba(245, 241, 232, 0.7);
-}
-
-@keyframes loaderSpin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* ---------------- 响应式 ---------------- */
-@media (max-width: 900px) {
+@include responsive(900px) {
   // 小屏取消整屏锁定，让内容自然高度（避免长内容被裁切）
   .home__section {
     height: auto;
     min-height: 100vh;
     overflow: visible;
-  }
-
-  .home__dots {
-    right: 8px;
-    gap: 14px;
-  }
-
-  .home__dot-label {
-    display: none;
   }
 }
 </style>

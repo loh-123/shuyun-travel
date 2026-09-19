@@ -1,0 +1,113 @@
+// ============================================================
+// 公共 mixin
+// 组件内用法：
+//   @use '@/styles/variables' as *;
+//   @use '@/styles/mixins' as *;
+// ============================================================
+@use 'sass:map';
+@use './variables' as *;
+
+// ------------------------------------------------------------
+// 布局
+// ------------------------------------------------------------
+
+/// 水平垂直居中
+/// @param $direction 主轴方向，默认 row
+@mixin flex-center($direction: row) {
+  display: flex;
+  flex-direction: $direction;
+  align-items: center;
+  justify-content: center;
+}
+
+// ------------------------------------------------------------
+// 文本
+// ------------------------------------------------------------
+
+/// 文本省略号
+/// @param $lines 行数，1 为单行省略，>1 为多行省略
+@mixin text-ellipsis($lines: 1) {
+  @if $lines == 1 {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  } @else {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: $lines;
+  }
+}
+
+// ------------------------------------------------------------
+// 质感
+// ------------------------------------------------------------
+
+/// 磨砂玻璃
+/// @param $bg 底色，默认面板白
+/// @param $blur 模糊半径
+@mixin glass($bg: $color-glass, $blur: 14px) {
+  background: $bg;
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+}
+
+/// 金色描边（可同时给圆角）
+/// @param $alpha 金色透明度
+/// @param $radius 圆角，0 表示不设置
+@mixin gold-border($alpha: 0.42, $radius: 0) {
+  border: 1px solid rgba(201, 168, 106, $alpha);
+
+  @if $radius != 0 {
+    border-radius: $radius;
+  }
+}
+
+// ------------------------------------------------------------
+// 交互
+// ------------------------------------------------------------
+
+/// hover 上浮 + 阴影加深（卡片统一动效）
+/// @param $y 上浮距离
+/// @param $scale 放大比例
+/// @param $shadow hover 阴影
+@mixin hover-lift($y: -8px, $scale: 1.02, $shadow: $shadow-lg) {
+  transition:
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo;
+  will-change: transform;
+
+  &:hover {
+    transform: translateY($y) scale($scale);
+    box-shadow: $shadow;
+  }
+}
+
+// ------------------------------------------------------------
+// 响应式
+// ------------------------------------------------------------
+
+/// 预设断点（与设计稿一致）
+$breakpoints: (
+  sm: 640px,
+  md: 768px,
+  lg: 1024px,
+  xl: 1366px,
+);
+
+/// 响应式断点：@include responsive(md) { ... }
+/// 也可以直接传像素值：@include responsive(900px) { ... }
+@mixin responsive($breakpoint) {
+  $value: map.get($breakpoints, $breakpoint);
+
+  @if $value {
+    @media (max-width: $value) {
+      @content;
+    }
+  } @else {
+    @media (max-width: $breakpoint) {
+      @content;
+    }
+  }
+}

@@ -1,57 +1,21 @@
 <script setup lang="ts">
 /**
- * 鼠标跟随光晕
- * - 直径 400px 的径向渐变圆，混色模式 soft-light，营造「灯下看绢」的暖调
- * - 用 rAF + lerp 做缓动跟随，避免生硬
- * - 触屏设备（无 hover）自动不启用
+ * 鼠标跟随光晕（全局公共组件）
+ * - 直径 400px 的径向渐变圆，soft-light 混色，营造「灯下看绢」的暖调
+ * - 位置追踪交给 useCursor（rAF + lerp 缓动），直接写 transform，不触发组件重渲染
+ * - 触屏设备自动不启用
  */
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
+import { useCursor } from '@/composables/useCursor'
 
 const glowEl = ref<HTMLElement | null>(null)
 
-/** 目标位置（鼠标） */
-let targetX = 0
-let targetY = 0
-/** 当前位置（缓动结果） */
-let currentX = 0
-let currentY = 0
-let rafId = 0
-let enabled = false
-
-function onPointerMove(e: MouseEvent) {
-  targetX = e.clientX
-  targetY = e.clientY
-}
-
-function loop() {
-  const el = glowEl.value
-  if (el) {
-    // 线性插值：每帧靠近目标 12%
-    currentX += (targetX - currentX) * 0.12
-    currentY += (targetY - currentY) * 0.12
-    el.style.transform = `translate3d(${currentX}px, ${currentY}px, 0) translate(-50%, -50%)`
-  }
-  rafId = requestAnimationFrame(loop)
-}
+const { bind, enabled } = useCursor({ lerp: 0.12 })
 
 onMounted(() => {
-  // 触屏设备不启用光晕
-  if (window.matchMedia('(hover: none)').matches) {
-    return
-  }
-  enabled = true
-  targetX = currentX = window.innerWidth / 2
-  targetY = currentY = window.innerHeight / 2
-  window.addEventListener('mousemove', onPointerMove, { passive: true })
-  rafId = requestAnimationFrame(loop)
-})
-
-onUnmounted(() => {
-  if (enabled) {
-    window.removeEventListener('mousemove', onPointerMove)
-  }
-  if (rafId) {
-    cancelAnimationFrame(rafId)
+  // useCursor 的 onMounted 先于本组件的 onMounted 执行，此时 enabled 已就绪
+  if (enabled.value) {
+    bind(glowEl.value)
   }
 })
 </script>

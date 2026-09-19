@@ -1,14 +1,14 @@
 <script setup lang="ts">
 /**
  * 第二屏：数据概览
- * - 全屏实景图（峨眉云海）+ 多层遮罩
+ * - 全屏实景图 + 多层遮罩（背景由 Home.vue 的统一舞台渲染）
  * - 「21 市州 · 1892 处景点 · 128 项非遗」进入视口时数字滚动
+ * - 复用公共能力：useScrollReveal（入场动画）、useCountUp（数字滚动）、SectionTitle
  */
-import { onMounted, onUnmounted, ref } from 'vue'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-
-gsap.registerPlugin(ScrollTrigger)
+import { ref } from 'vue'
+import { useScrollReveal } from '@/composables/useScrollReveal'
+import { useCountUp } from '@/composables/useCountUp'
+import SectionTitle from '@/components/common/SectionTitle.vue'
 
 const rootEl = ref<HTMLElement | null>(null)
 const statsEl = ref<HTMLElement | null>(null)
@@ -20,58 +20,23 @@ const stats = ref([
   { num: 0, target: 128, unit: '', label: '项非遗', en: 'Heritage' },
 ])
 
-let ctx: gsap.Context | null = null
+// 文案依次淡入（与原实现参数一致）
+useScrollReveal(rootEl, '.data__animate', { y: 40, stagger: 0.12, start: 'top 60%' })
 
-onMounted(() => {
-  const root = rootEl.value
-  if (!root) {
-    return
-  }
-
-  ctx = gsap.context(() => {
-    // 数字滚动
-    stats.value.forEach((item) => {
-      gsap.fromTo(
-        item,
-        { num: 0 },
-        {
-          num: item.target,
-          duration: 2,
-          ease: 'power2.out',
-          snap: { num: 1 },
-          scrollTrigger: { trigger: statsEl.value, start: 'top 78%', once: true },
-        },
-      )
-    })
-
-    // 文案依次淡入
-    gsap.from('.data__animate', {
-      y: 40,
-      opacity: 0,
-      duration: 1,
-      ease: 'power3.out',
-      stagger: 0.12,
-      scrollTrigger: { trigger: root, start: 'top 60%', once: true },
-    })
-  }, root)
-
-  ScrollTrigger.refresh()
-})
-
-onUnmounted(() => {
-  ctx?.revert()
-})
+// 数字滚动：进入视口时把 num 从 0 滚到 target
+useCountUp(stats, { trigger: statsEl, duration: 2 })
 </script>
 
 <template>
   <div ref="rootEl" class="data">
     <div class="sy-container data__inner">
-      <p class="sy-eyebrow data__animate">Data Overview</p>
-      <h2 class="sy-title sy-on-dark data__title data__animate">蜀地家底 · 一眼千年</h2>
-      <p class="sy-text sy-on-dark data__desc data__animate">
-        从成都平原到川西高原，蜀韵·智游把散落在巴蜀大地上的城市、景点与非物质文化遗产，
-        整理成一条可以「读懂」的旅行脉络。
-      </p>
+      <SectionTitle
+        eyebrow="Data Overview"
+        variant="on-dark"
+        animate-class="data__animate"
+        title="蜀地家底 · 一眼千年"
+        desc="从成都平原到川西高原，蜀韵·智游把散落在巴蜀大地上的城市、景点与非物质文化遗产，整理成一条可以「读懂」的旅行脉络。"
+      />
 
       <div ref="statsEl" class="data__stats">
         <div v-for="item in stats" :key="item.label" class="data__stat data__animate">
@@ -88,6 +53,7 @@ onUnmounted(() => {
 
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
+@use '@/styles/mixins' as *;
 
 .data {
   position: relative;
@@ -103,27 +69,15 @@ onUnmounted(() => {
   position: relative;
   z-index: $z-content;
   width: 100%;
+  // 纵向节奏跟随视口高度（整屏分节），保持原有观感
   padding-block: clamp(48px, 10vh, 140px);
-}
-
-.data__title {
-  margin-top: clamp(10px, 1.6vh, 22px);
-  color: $color-text-light;
-  text-shadow: $shadow-text;
-}
-
-.data__desc {
-  margin-top: clamp(14px, 2vh, 26px);
-  color: $color-text-light;
-  opacity: 0.86;
-  text-shadow: $shadow-text-soft;
 }
 
 /* ---------------- 数据 ---------------- */
 .data__stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: $gap-md;
+  gap: $space-md;
   margin-top: clamp(32px, 6vh, 80px);
 }
 
@@ -179,14 +133,14 @@ onUnmounted(() => {
 }
 
 /* ---------------- 响应式 ---------------- */
-@media (max-width: 768px) {
+@include responsive(md) {
   .data {
     align-items: center;
   }
 
   .data__stats {
     grid-template-columns: 1fr;
-    gap: $gap-sm;
+    gap: $space-sm;
   }
 }
 </style>

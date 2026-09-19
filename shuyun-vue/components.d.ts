@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AiSection: typeof import('./src/components/home/AiSection.vue')['default']
+    CultureIcon: typeof import('./src/components/common/CultureIcon.vue')['default']
     CultureSection: typeof import('./src/components/home/CultureSection.vue')['default']
     CursorGlow: typeof import('./src/components/common/CursorGlow.vue')['default']
     DataSection: typeof import('./src/components/home/DataSection.vue')['default']
@@ -21,13 +22,15 @@ declare module 'vue' {
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElInput: typeof import('element-plus/es')['ElInput']
     ElInputNumber: typeof import('element-plus/es')['ElInputNumber']
-    ElOption: typeof import('element-plus/es')['ElOption']
-    ElPagination: typeof import('element-plus/es')['ElPagination']
-    ElSelect: typeof import('element-plus/es')['ElSelect']
+    GhostButton: typeof import('./src/components/common/GhostButton.vue')['default']
+    GoldButton: typeof import('./src/components/common/GoldButton.vue')['default']
     HeroSection: typeof import('./src/components/home/HeroSection.vue')['default']
+    Loading: typeof import('./src/components/common/Loading.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ScrollIndicator: typeof import('./src/components/common/ScrollIndicator.vue')['default']
     SeasonSection: typeof import('./src/components/home/SeasonSection.vue')['default']
+    SectionTitle: typeof import('./src/components/common/SectionTitle.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

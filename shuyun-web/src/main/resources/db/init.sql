@@ -272,3 +272,16 @@ UPDATE `culture` SET `content` = '四川是三国时期蜀汉政权的中心，�
 UPDATE `culture` SET `content` = '三星堆遗址位于四川广汉，是距今约三千至五千年的古蜀文化遗址。青铜神树、纵目面具、黄金权杖等文物造型奇特，展现了与中原文明迥异而璀璨的古蜀文明。\n三星堆博物馆新馆已开放，青铜大立人、青铜神树与纵目面具是必看之作。它与成都金沙遗址一脉相承，太阳神鸟金饰与青铜立人共同勾勒出古蜀文明的神秘轮廓。' WHERE `id` = 6;
 UPDATE `culture` SET `content` = '大熊猫是中国的国宝与珍稀物种，四川是其最主要的栖息地，拥有成都大熊猫繁育研究基地、卧龙自然保护区等。憨态可掬的形象让大熊猫成为四川乃至中国的文化名片。\n看熊猫宜在清晨，此时它们最为活跃；成都大熊猫繁育研究基地交通便利，都江堰的熊猫谷与卧龙中华大熊猫苑则能看到更接近野外的状态。四川的竹海与山地生态，正是这一物种得以延续的底气。' WHERE `id` = 7;
 UPDATE `culture` SET `content` = '四川是中国白酒的重要产区，五粮液、泸州老窖、剑南春、郎酒等名酒享誉全国。酒在四川的饮食、社交与节庆中占据重要地位，形成独特的酒文化。\n宜宾、泸州、绵竹、古蔺串联起川酒版图：宜宾五粮液取五粮之香，泸州老窖以百年窖池群著称，绵竹剑南春、古蔺郎酒各有风土。泸州老窖的窖池与宜宾的窖池群至今仍在持续酿造，被称作「活文物」。' WHERE `id` = 8;
+
+-- 9. 景点补充信息（开放时间 / 门票 / 地址 / 经纬度）
+--    整理自公开信息的示例值，实际以景区公告为准；用 SET 全量赋值，可重复执行
+UPDATE `scenic_spot` SET `address` = '四川省阿坝州九寨沟县漳扎镇', `open_time` = '07:00-18:00', `ticket_info` = '旺季 169 元 / 淡季 80 元', `longitude` = 103.918000, `latitude` = 33.260000 WHERE `id` = 1;
+UPDATE `scenic_spot` SET `address` = '四川省成都市都江堰市公园路', `open_time` = '08:00-18:00', `ticket_info` = '80 元', `longitude` = 103.606000, `latitude` = 31.006000 WHERE `id` = 2;
+UPDATE `scenic_spot` SET `address` = '四川省乐山市峨眉山市黄湾镇', `open_time` = '06:00-18:30', `ticket_info` = '160 元', `longitude` = 103.484000, `latitude` = 29.601000 WHERE `id` = 3;
+UPDATE `scenic_spot` SET `address` = '四川省乐山市市中区凌云路', `open_time` = '07:30-18:30', `ticket_info` = '80 元', `longitude` = 103.771000, `latitude` = 29.544000 WHERE `id` = 4;
+UPDATE `scenic_spot` SET `address` = '四川省德阳市广汉市西安路 133 号', `open_time` = '08:30-18:00', `ticket_info` = '72 元', `longitude` = 104.199000, `latitude` = 31.010000 WHERE `id` = 5;
+UPDATE `scenic_spot` SET `address` = '四川省甘孜州稻城县香格里拉镇', `open_time` = '06:30-18:00', `ticket_info` = '146 元（含观光车）', `longitude` = 100.331000, `latitude` = 28.435000 WHERE `id` = 6;
+UPDATE `scenic_spot` SET `address` = '四川省成都市大邑县西岭镇', `open_time` = '08:30-17:30', `ticket_info` = '120 元', `longitude` = 103.190000, `latitude` = 30.800000 WHERE `id` = 7;
+UPDATE `scenic_spot` SET `address` = '四川省成都市都江堰市青城山镇', `open_time` = '08:00-18:00', `ticket_info` = '80 元', `longitude` = 103.568000, `latitude` = 30.902000 WHERE `id` = 8;
+UPDATE `scenic_spot` SET `address` = '四川省成都市武侯区武侯祠大街 231 号', `open_time` = '08:00-20:00', `ticket_info` = '50 元', `longitude` = 104.048000, `latitude` = 30.645000 WHERE `id` = 9;
+UPDATE `scenic_spot` SET `address` = '四川省成都市青羊区青华路 37 号', `open_time` = '08:00-18:30', `ticket_info` = '50 元', `longitude` = 104.030000, `latitude` = 30.665000 WHERE `id` = 10;

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
+import CursorGlow from '@/components/common/CursorGlow.vue'
 </script>
 
 <template>
@@ -10,6 +11,9 @@ import DefaultLayout from '@/layouts/DefaultLayout.vue'
       </transition>
     </router-view>
   </DefaultLayout>
+
+  <!-- 鼠标跟随光晕：全局挂载，所有页面共用 -->
+  <CursorGlow />
 </template>
 
 <style>
