@@ -92,11 +92,43 @@ const langMenuOpen = ref(false)
 const lang = ref<'zh' | 'en'>('zh')
 
 /** 搜索 */
+interface SearchCity {
+  id: number
+  name: string
+  count: number
+}
+interface SearchScenic {
+  id: number
+  name: string
+  cityName?: string
+  type?: string
+  coverImage?: string
+  score?: number
+}
+interface SearchCulture {
+  id: number
+  name: string
+  category?: string
+  coverImage?: string
+  summary?: string
+}
+
 const searchInput = ref<HTMLInputElement | null>(null)
 const keyword = ref('')
 const searching = ref(false)
-const searchResults = ref<{ id: number; name: string; cityName?: string; type?: string; coverImage?: string }[]>([])
+const hotKeywords = ref<string[]>([])
+const searchResult = ref<{ cities: SearchCity[]; scenics: SearchScenic[]; cultures: SearchCulture[] }>({
+  cities: [],
+  scenics: [],
+  cultures: [],
+})
+/** 本地搜索历史（最多 6 条） */
+const searchHistory = ref<string[]>([])
+/** 键盘选中项下标（-1 表示未选中） */
+const activeIndex = ref(-1)
 let searchTimer: number | undefined
+
+const HISTORY_KEY = 'shuyun_search_history'
 
 /** 页脚滚动入场上下文 */
 let ctx: gsap.Context | null = null
@@ -119,6 +151,22 @@ const solid = computed(() => scrolled.value || !hasHero.value)
 /** 用户头像（没有就用首字母） */
 const avatarUrl = computed(() => userStore.user?.avatar || '')
 const initial = computed(() => userStore.user?.username?.charAt(0)?.toUpperCase() || '蜀')
+
+/** 拍平候选结果，供 ↑↓ 选择 / Enter 打开 */
+const flatResults = computed(() => [
+  ...searchResult.value.cities.map((c) => ({ kind: 'city' as const, id: c.id, label: c.name })),
+  ...searchResult.value.scenics.map((s) => ({ kind: 'scenic' as const, id: s.id, label: s.name })),
+  ...searchResult.value.cultures.map((c) => ({ kind: 'culture' as const, id: c.id, label: c.name })),
+])
+
+/** 是否有任何结果 */
+const hasResult = computed(() => flatResults.value.length > 0)
+
+/** 当前键盘选中的是否就是这一条（用于高亮） */
+function isActiveResult(kind: 'city' | 'scenic' | 'culture', id: number) {
+  const item = flatResults.value[activeIndex.value]
+  return !!item && item.kind === kind && item.id === id
+}
 
 /* ------------------------------------------------------------
  * 滚动与高亮
@@ -156,27 +204,117 @@ function goProfile(tab: string) {
 
 function openSearch() {
   searchOpen.value = true
+  loadHistory()
+  activeIndex.value = -1
   nextTick(() => searchInput.value?.focus())
 }
 
-/** 搜索：300ms 防抖后调景点接口（后端支持 keyword） */
+/** 关键词高亮：先转义再包 <em>，避免 XSS */
+function highlight(text: string, kw: string) {
+  const safe = (text || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c] ?? c))
+  if (!kw) {
+    return safe
+  }
+  const key = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return safe.replace(new RegExp(key, 'gi'), (m) => `<em class="hl">${m}</em>`)
+}
+
+/** 读 / 存本地搜索历史 */
+function loadHistory() {
+  try {
+    searchHistory.value = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]') as string[]
+  } catch {
+    searchHistory.value = []
+  }
+}
+
+function pushHistory(text: string) {
+  if (!text) {
+    return
+  }
+  const next = [text, ...searchHistory.value.filter((x) => x !== text)].slice(0, 6)
+  searchHistory.value = next
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+}
+
+function clearHistory() {
+  searchHistory.value = []
+  localStorage.removeItem(HISTORY_KEY)
+}
+
+/** 用某个词发起搜索（热门词 / 历史词） */
+function searchBy(text: string) {
+  keyword.value = text
+}
+
+/** 打开某条结果 */
+function openResult(item: { kind: 'city' | 'scenic' | 'culture'; id: number; label: string }) {
+  pushHistory(keyword.value.trim() || item.label)
+  if (item.kind === 'city') {
+    go(`/scenic?cityId=${item.id}`)
+    return
+  }
+  if (item.kind === 'scenic') {
+    go(`/scenic/${item.id}`)
+    return
+  }
+  go(`/culture/${item.id}`)
+}
+
+/** 查看全部景点结果（带关键词跳到列表页） */
+function viewAllScenics() {
+  const kw = keyword.value.trim()
+  if (!kw) {
+    return
+  }
+  pushHistory(kw)
+  go(`/scenic?keyword=${encodeURIComponent(kw)}`)
+}
+
+/** 浮层内键盘操作 */
+function onSearchKeydown(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    activeIndex.value = Math.min(activeIndex.value + 1, flatResults.value.length - 1)
+    return
+  }
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    activeIndex.value = Math.max(activeIndex.value - 1, -1)
+    return
+  }
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    const item = flatResults.value[activeIndex.value]
+    if (item) {
+      openResult(item)
+    } else {
+      viewAllScenics()
+    }
+  }
+}
+
+/** 聚合搜索：300ms 防抖，一次拿回市州 / 景点 / 文化三类结果 */
 watch(keyword, (kw) => {
   window.clearTimeout(searchTimer)
+  activeIndex.value = -1
   const text = kw.trim()
   if (!text) {
-    searchResults.value = []
+    searchResult.value = { cities: [], scenics: [], cultures: [] }
     return
   }
   searchTimer = window.setTimeout(async () => {
     searching.value = true
     try {
-      const res = await request.get('/scenic/list', {
-        silent: true,
-        params: { page: 1, size: 6, keyword: text },
-      })
-      searchResults.value = res.data?.records ?? []
+      const res = await request.get('/search', { silent: true, params: { keyword: text, limit: 5 } })
+      hotKeywords.value = res.data?.hotKeywords ?? []
+      searchResult.value = {
+        cities: res.data?.cities ?? [],
+        scenics: res.data?.scenics ?? [],
+        cultures: res.data?.cultures ?? [],
+      }
     } catch {
-      searchResults.value = []
+      searchResult.value = { cities: [], scenics: [], cultures: [] }
     } finally {
       searching.value = false
     }
@@ -477,27 +615,111 @@ watch(
                 v-model="keyword"
                 class="search__input"
                 type="text"
-                placeholder="搜索景点或城市（如 九寨沟 / 成都）"
+                placeholder="搜索景点、市州、文化（如 九寨沟 / 成都 / 川剧）"
+                @keydown="onSearchKeydown"
               />
               <button type="button" class="search__esc" @click="searchOpen = false">ESC</button>
             </div>
 
-            <ul v-if="searchResults.length" class="search__list">
-              <li v-for="s in searchResults" :key="s.id" @click="go(`/scenic/${s.id}`)">
-                <img class="search__cover" :src="s.coverImage" alt="" loading="lazy" />
-                <span class="search__info">
-                  <b>{{ s.name }}</b>
-                  <em>{{ s.cityName }} · {{ s.type }}</em>
-                </span>
-                <span class="search__arrow">→</span>
-              </li>
-            </ul>
+            <!-- ---------- 有输入：分组结果 ---------- -->
+            <div v-if="keyword" class="search__body">
+              <!-- 市州 -->
+              <section v-if="searchResult.cities.length" class="search__group">
+                <p class="search__group-title">市州</p>
+                <ul class="search__list">
+                  <li
+                    v-for="c in searchResult.cities"
+                    :key="`city-${c.id}`"
+                    :class="{ 'is-active': isActiveResult('city', c.id) }"
+                    @click="openResult({ kind: 'city', id: c.id, label: c.name })"
+                  >
+                    <span class="search__badge">州</span>
+                    <span class="search__info">
+                      <b v-html="highlight(c.name, keyword.trim())" />
+                      <em>共 {{ c.count }} 个景点</em>
+                    </span>
+                    <span class="search__arrow">→</span>
+                  </li>
+                </ul>
+              </section>
 
-            <p v-else-if="keyword && !searching" class="search__empty">没有找到匹配的景点，换个关键词试试</p>
-            <p v-else-if="!keyword" class="search__tip">
-              试试：
-              <span v-for="t in ['九寨沟', '三星堆', '大熊猫', '都江堰']" :key="t" @click="keyword = t">{{ t }}</span>
-            </p>
+              <!-- 景点 -->
+              <section v-if="searchResult.scenics.length" class="search__group">
+                <p class="search__group-title">
+                  景点
+                  <button type="button" class="search__more" @click="viewAllScenics">查看全部 →</button>
+                </p>
+                <ul class="search__list">
+                  <li
+                    v-for="s in searchResult.scenics"
+                    :key="`scenic-${s.id}`"
+                    :class="{ 'is-active': isActiveResult('scenic', s.id) }"
+                    @click="openResult({ kind: 'scenic', id: s.id, label: s.name })"
+                  >
+                    <img class="search__cover" :src="s.coverImage" alt="" loading="lazy" />
+                    <span class="search__info">
+                      <b v-html="highlight(s.name, keyword.trim())" />
+                      <em>{{ s.cityName }} · {{ s.type }}</em>
+                    </span>
+                    <span class="search__arrow">→</span>
+                  </li>
+                </ul>
+              </section>
+
+              <!-- 文化 -->
+              <section v-if="searchResult.cultures.length" class="search__group">
+                <p class="search__group-title">文化</p>
+                <ul class="search__list">
+                  <li
+                    v-for="c in searchResult.cultures"
+                    :key="`culture-${c.id}`"
+                    :class="{ 'is-active': isActiveResult('culture', c.id) }"
+                    @click="openResult({ kind: 'culture', id: c.id, label: c.name })"
+                  >
+                    <img class="search__cover" :src="c.coverImage" alt="" loading="lazy" />
+                    <span class="search__info">
+                      <b v-html="highlight(c.name, keyword.trim())" />
+                      <em>{{ c.category }}</em>
+                    </span>
+                    <span class="search__arrow">→</span>
+                  </li>
+                </ul>
+              </section>
+
+              <p v-if="searching" class="search__empty">正在搜索…</p>
+              <p v-else-if="!hasResult" class="search__empty">没有找到「{{ keyword }}」相关的内容</p>
+
+              <p class="search__hint">↑↓ 选择 · Enter 打开 · Esc 关闭</p>
+            </div>
+
+            <!-- ---------- 无输入：历史 + 热门 ---------- -->
+            <div v-else class="search__body">
+              <section v-if="searchHistory.length" class="search__group">
+                <p class="search__group-title">
+                  最近搜索
+                  <button type="button" class="search__more" @click="clearHistory">清空</button>
+                </p>
+                <div class="search__chips">
+                  <button v-for="h in searchHistory" :key="h" type="button" @click="searchBy(h)">
+                    {{ h }}
+                  </button>
+                </div>
+              </section>
+
+              <section class="search__group">
+                <p class="search__group-title">热门搜索</p>
+                <div class="search__chips">
+                  <button
+                    v-for="t in hotKeywords.length ? hotKeywords : ['九寨沟', '三星堆', '大熊猫', '都江堰']"
+                    :key="t"
+                    type="button"
+                    @click="searchBy(t)"
+                  >
+                    {{ t }}
+                  </button>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </transition>
@@ -1030,9 +1252,6 @@ watch(
   display: flex;
   flex-direction: column;
   gap: 4px;
-  max-height: 52vh;
-  margin-top: 10px;
-  overflow-y: auto;
 
   li {
     display: flex;
@@ -1043,7 +1262,8 @@ watch(
     cursor: pointer;
     transition: background-color $duration-fast $ease-out-expo;
 
-    &:hover {
+    &:hover,
+    &.is-active {
       background: rgba(201, 168, 106, 0.14);
 
       .search__arrow {
@@ -1052,6 +1272,104 @@ watch(
       }
     }
   }
+}
+
+/* 分组结果容器 */
+.search__body {
+  max-height: 58vh;
+  overflow-y: auto;
+}
+
+.search__group {
+  padding-top: 12px;
+
+  & + .search__group {
+    margin-top: 12px;
+    border-top: 1px dashed rgba(201, 168, 106, 0.2);
+  }
+}
+
+.search__group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  color: rgba(201, 168, 106, 0.9);
+}
+
+.search__more {
+  font-family: $font-body;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: rgba(245, 241, 232, 0.55);
+  transition: color $duration-fast $ease-out-expo;
+
+  &:hover {
+    color: $color-gold;
+  }
+}
+
+/* 市州徽标 */
+.search__badge {
+  @include flex-center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border: 1px solid rgba(201, 168, 106, 0.5);
+  border-radius: $radius-sm;
+  background: rgba(140, 31, 40, 0.35);
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: 15px;
+  color: $color-gold;
+}
+
+/* 空态：历史 / 热门词 */
+.search__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  button {
+    padding: 6px 14px;
+    border: 1px solid rgba(201, 168, 106, 0.4);
+    border-radius: $radius-pill;
+    font-family: $font-body;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    color: rgba(245, 241, 232, 0.75);
+    transition:
+      border-color $duration-fast $ease-out-expo,
+      background-color $duration-fast $ease-out-expo,
+      color $duration-fast $ease-out-expo;
+
+    &:hover {
+      border-color: $color-gold;
+      background: rgba(201, 168, 106, 0.16);
+      color: $color-gold;
+    }
+  }
+}
+
+/* 命中关键词高亮 */
+.search__panel :deep(.hl) {
+  padding: 0 1px;
+  background: rgba(201, 168, 106, 0.28);
+  border-radius: 2px;
+  font-style: normal;
+  color: $color-gold;
+}
+
+.search__hint {
+  padding: 14px 4px 4px;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  color: rgba(245, 241, 232, 0.35);
+  text-align: center;
 }
 
 .search__cover {
@@ -1093,22 +1411,11 @@ watch(
     transform $duration-fast $ease-out-expo;
 }
 
-.search__tip,
 .search__empty {
   padding: 22px 6px 6px;
   font-size: $fs-small;
   color: rgba(245, 241, 232, 0.55);
   text-align: center;
-
-  span {
-    margin-inline: 4px;
-    color: $color-gold;
-    cursor: pointer;
-
-    &:hover {
-      text-decoration: underline;
-    }
-  }
 }
 
 /* ============================================================

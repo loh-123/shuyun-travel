@@ -11,8 +11,8 @@
  *   - 后端 /api/scenic/list 暂无 sort 参数，「排序」在当前页数据上做客户端排序
  *   - 无「人气」字段，人气排序用「等级权重 + 评分」近似占位
  */
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
@@ -73,6 +73,7 @@ const SORTS: { label: string; key: 'default' | 'score' | 'hot' }[] = [
  * 状态
  * ---------------------------------------------------------- */
 const router = useRouter()
+const route = useRoute()
 
 const heroEl = ref<HTMLElement | null>(null)
 const filterEl = ref<HTMLElement | null>(null)
@@ -146,6 +147,21 @@ async function loadCities() {
     }
   } catch {
     // 忽略：城市下拉为空不影响其它筛选
+  }
+}
+
+/**
+ * 应用地址栏参数：支持从顶部聚合搜索跳进来
+ * （/scenic?keyword=九寨沟 、/scenic?cityId=1）
+ */
+function applyQueryParams() {
+  const kw = route.query.keyword
+  const cityId = route.query.cityId
+  if (typeof kw === 'string' && kw) {
+    query.keyword = kw
+  }
+  if (typeof cityId === 'string' && cityId) {
+    query.cityId = Number(cityId) || undefined
   }
 }
 
@@ -338,6 +354,9 @@ let entranceTl: gsap.core.Timeline | null = null
 onMounted(async () => {
   document.addEventListener('pointerdown', onDocPointerDown)
 
+  // 先应用地址栏参数，再取数据（避免多拉一次）
+  applyQueryParams()
+
   // 数据
   await Promise.all([loadCities(), loadList()])
   await nextTick()
@@ -374,6 +393,16 @@ onUnmounted(() => {
   entranceTl?.kill()
   entranceTl = null
 })
+
+// 已在本页时，顶部搜索再次跳转 → 同步筛选条件并刷新
+watch(
+  () => route.query,
+  () => {
+    applyQueryParams()
+    query.page = 1
+    reload(false)
+  },
+)
 </script>
 
 <template>

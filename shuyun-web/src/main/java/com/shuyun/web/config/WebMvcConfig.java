@@ -14,7 +14,7 @@ import java.nio.file.Paths;
  * Web MVC 配置
  *
  * <p>注册 {@link JwtInterceptor}：拦截 /api/**，放行登录、注册、健康检查，
- * 以及景点 / 市州 / 文化 / 天气等公开浏览接口；并把上传目录映射到 /upload/**。</p>
+ * 以及景点 / 市州 / 文化 / 聚合搜索 / 天气等公开浏览接口；并把上传目录映射到 /upload/**。</p>
  */
 @Configuration
 @RequiredArgsConstructor
@@ -37,6 +37,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                         "/api/scenic/**",
                         "/api/city/**",
                         "/api/culture/**",
+                        "/api/search",
                         "/api/weather");
     }
 

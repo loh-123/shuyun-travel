@@ -430,3 +430,9 @@ DEALLOCATE PREPARE stmt_bio;
 
 -- 17. 用户简介示例（可重复执行；仅本人可在个人中心修改）
 UPDATE `user` SET `bio` = '一步一步，把蜀地走成自己的地图' WHERE `bio` IS NULL;
+
+-- 18. 川菜标签补充「火锅」：让顶部搜索的热门词「火锅」也能命中（幂等）
+UPDATE `culture`
+SET `tags` = CONCAT(IFNULL(`tags`, ''), ',火锅')
+WHERE `id` = 3
+  AND IFNULL(`tags`, '') NOT LIKE '%火锅%';
