@@ -8,7 +8,9 @@ import com.shuyun.web.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.util.StringUtils;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,23 +26,24 @@ import java.util.UUID;
 /**
  * AI 对话接口
  *
- * <p>当前为占位实现，后续接入女娲智能体的 SSE 流式接口。</p>
+ * <p>当前回复由 {@code AiChatServiceImpl} 按关键词生成（Markdown），
+ * SSE 逐片推送；接入女娲智能体后只需替换服务层实现，接口与前端均不用改。</p>
  */
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
 public class AiController {
 
-    /** SSE 每片推送的字符数 */
-    private static final int CHUNK_SIZE = 2;
+    /** SSE 每片推送的字符数（越小越"逐字"，越大越快出结果） */
+    private static final int CHUNK_SIZE = 6;
 
     /** SSE 每片之间的间隔（毫秒） */
-    private static final long STREAM_INTERVAL_MS = 40L;
+    private static final long STREAM_INTERVAL_MS = 24L;
 
     private final AiChatService aiChatService;
 
     /**
-     * 发起一次对话
+     * 发起一次对话（非流式）
      *
      * @param body 请求体：{message, sessionId}；sessionId 为空时自动生成
      * @return 统一结果，data = {reply, sessionId}
@@ -66,26 +69,14 @@ public class AiController {
     }
 
     /**
-     * 查询会话历史
+     * 流式对话（SSE）
      *
-     * @param sessionId 会话ID
-     * @return 该会话的全部对话记录
-     */
-    @GetMapping("/history")
-    public Result<List<UserAiChat>> history(@RequestParam String sessionId) {
-        return Result.ok(aiChatService.listBySession(sessionId));
-    }
-
-    /**
-     * 流式对话（SSE 占位版）
-     *
-     * <p>当前逐字推送占位文案，后续替换为女娲智能体的真实流式输出。
-     * 注意：浏览器 EventSource 无法自定义请求头，因此 token 通过查询参数传递，
-     * 由 {@code JwtInterceptor} 统一解析。</p>
+     * <p>逐片推送 Markdown 文本。注意：浏览器 EventSource 无法自定义请求头，
+     * 因此 token 通过查询参数传递，由 {@code JwtInterceptor} 统一解析。</p>
      *
      * @param message   用户消息
      * @param sessionId 会话ID，为空时自动生成
-     * @return SSE 事件流
+     * @return SSE 事件流（session → message... → done）
      */
     @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter chatStream(@RequestParam String message,
@@ -101,13 +92,13 @@ public class AiController {
 
         SseEmitter emitter = new SseEmitter(60_000L);
         try {
-            // 1) 保存用户消息 + 占位回复（与同步接口一致）
+            // 1) 落库（用户消息 + 回复），并拿到回复全文
             String reply = aiChatService.chat(userId, message, sid);
 
             // 2) 先把 sessionId 推给前端
             emitter.send(SseEmitter.event().name("session").data(sid));
 
-            // 3) 逐字推送回复（占位实现，无真实模型调用）
+            // 3) 逐片推送
             for (int i = CHUNK_SIZE; i < reply.length() + CHUNK_SIZE; i += CHUNK_SIZE) {
                 String chunk = reply.substring(0, Math.min(i, reply.length()));
                 emitter.send(SseEmitter.event().name("message").data(chunk));
@@ -123,5 +114,38 @@ public class AiController {
             emitter.completeWithError(e);
         }
         return emitter;
+    }
+
+    /**
+     * 查询会话历史
+     *
+     * @param sessionId 会话ID
+     * @return 该会话的全部对话记录（仅限本人）
+     */
+    @GetMapping("/history")
+    public Result<List<UserAiChat>> history(@RequestParam String sessionId) {
+        return Result.ok(aiChatService.listBySession(UserContext.getUserId(), sessionId));
+    }
+
+    /**
+     * 查询当前用户的会话列表（按最近消息倒序）
+     *
+     * @return [{sessionId, title, lastTime, messageCount}]
+     */
+    @GetMapping("/sessions")
+    public Result<List<Map<String, Object>>> sessions() {
+        return Result.ok(aiChatService.listSessions(UserContext.getUserId()));
+    }
+
+    /**
+     * 删除某个会话的全部消息
+     *
+     * @param sessionId 会话ID
+     * @return 空结果
+     */
+    @DeleteMapping("/session/{sessionId}")
+    public Result<Void> removeSession(@PathVariable String sessionId) {
+        aiChatService.removeSession(UserContext.getUserId(), sessionId);
+        return Result.ok();
     }
 }

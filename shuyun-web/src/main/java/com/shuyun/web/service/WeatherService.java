@@ -11,7 +11,10 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,7 +39,9 @@ public class WeatherService {
      */
     private static final String API =
             "https://api.open-meteo.com/v1/forecast?latitude=%s&longitude=%s"
-                    + "&current=temperature_2m,weather_code&timezone=Asia%%2FShanghai";
+                    + "&current=temperature_2m,weather_code,wind_speed_10m,uv_index"
+                    + "&daily=weather_code,temperature_2m_max,temperature_2m_min&forecast_days=3"
+                    + "&timezone=Asia%%2FShanghai";
 
     /** 请求超时（秒） */
     private static final Duration TIMEOUT = Duration.ofSeconds(4);
@@ -112,34 +117,121 @@ public class WeatherService {
      * 解析 Open-Meteo 响应
      */
     private Map<String, Object> parse(String city, String body) throws Exception {
-        JsonNode current = objectMapper.readTree(body).path("current");
+        JsonNode root = objectMapper.readTree(body);
+        JsonNode current = root.path("current");
         JsonNode tempNode = current.path("temperature_2m");
         if (tempNode.isMissingNode() || tempNode.isNull()) {
             return fallback(city);
         }
         double temp = tempNode.asDouble();
         int code = current.path("weather_code").asInt(0);
-        return build(city, temp, code);
+        double wind = current.path("wind_speed_10m").asDouble(0);
+        double uv = current.path("uv_index").asDouble(0);
+        return build(city, temp, code, wind, uv, parseDaily(root.path("daily")));
+    }
+
+    /**
+     * 解析 3 日预报
+     */
+    private List<Map<String, Object>> parseDaily(JsonNode daily) {
+        List<Map<String, Object>> list = new ArrayList<>();
+        JsonNode dates = daily.path("time");
+        JsonNode codes = daily.path("weather_code");
+        JsonNode maxs = daily.path("temperature_2m_max");
+        JsonNode mins = daily.path("temperature_2m_min");
+
+        for (int i = 0; i < dates.size(); i++) {
+            int code = codes.path(i).asInt(0);
+            Map<String, Object> day = new LinkedHashMap<>();
+            day.put("date", dates.path(i).asText());
+            day.put("text", textOf(code));
+            day.put("icon", iconOf(code));
+            day.put("max", Math.round(maxs.path(i).asDouble()));
+            day.put("min", Math.round(mins.path(i).asDouble()));
+            list.add(day);
+        }
+        return list;
     }
 
     /**
      * 兜底数据（接口不可用时使用）
      */
     private Map<String, Object> fallback(String city) {
-        return build(city, 22, 2);
+        List<Map<String, Object>> daily = new ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            Map<String, Object> day = new LinkedHashMap<>();
+            day.put("date", LocalDate.now().plusDays(i).toString());
+            day.put("text", "多云");
+            day.put("icon", "cloud");
+            day.put("max", 24 + i);
+            day.put("min", 16 + i);
+            daily.add(day);
+        }
+        return build(city, 22, 2, 2.6, 4, daily);
     }
 
     /**
      * 组装返回结构
      */
-    private Map<String, Object> build(String city, double temp, int code) {
+    private Map<String, Object> build(String city, double temp, int code, double wind, double uv,
+                                     List<Map<String, Object>> daily) {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("city", city);
         data.put("temp", String.valueOf(Math.round(temp)));
         data.put("text", textOf(code));
         data.put("tip", tipOf(temp, code));
         data.put("icon", iconOf(code));
+        data.put("wind", windText(wind));
+        data.put("uv", uvText(uv));
+        data.put("daily", daily);
         return data;
+    }
+
+    /**
+     * 风速（m/s）-> 风力等级描述
+     */
+    private String windText(double speed) {
+        if (speed < 0.3) {
+            return "0 级 · 无风";
+        }
+        if (speed < 1.6) {
+            return "1 级 · 软风";
+        }
+        if (speed < 3.4) {
+            return "2 级 · 轻风";
+        }
+        if (speed < 5.5) {
+            return "3 级 · 微风";
+        }
+        if (speed < 8.0) {
+            return "4 级 · 和风";
+        }
+        if (speed < 10.8) {
+            return "5 级 · 清风";
+        }
+        if (speed < 13.9) {
+            return "6 级 · 强风";
+        }
+        return "7 级以上 · 需注意";
+    }
+
+    /**
+     * 紫外线指数 -> 强度描述
+     */
+    private String uvText(double uv) {
+        if (uv < 3) {
+            return "弱";
+        }
+        if (uv < 6) {
+            return "中等（建议防晒）";
+        }
+        if (uv < 8) {
+            return "强（注意防晒）";
+        }
+        if (uv < 11) {
+            return "很强（务必防晒）";
+        }
+        return "极强";
     }
 
     /**
