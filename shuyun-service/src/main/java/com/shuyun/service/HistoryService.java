@@ -45,4 +45,12 @@ public interface HistoryService extends IService<UserViewHistory> {
      * @param userId 用户ID
      */
     void clear(Long userId);
+
+    /**
+     * 统计「去过的城市」：足迹里景点所属市州去重后的数量
+     *
+     * @param userId 用户ID
+     * @return 城市数
+     */
+    int countCities(Long userId);
 }

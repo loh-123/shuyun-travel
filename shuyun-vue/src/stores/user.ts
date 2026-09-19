@@ -7,6 +7,8 @@ export interface UserInfo {
   username: string
   email: string
   avatar?: string | null
+  /** 一句话简介 */
+  bio?: string | null
   role?: string
   status?: number
 }

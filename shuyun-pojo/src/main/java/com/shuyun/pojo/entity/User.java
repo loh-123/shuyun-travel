@@ -42,6 +42,10 @@ public class User implements Serializable {
     @TableField("avatar")
     private String avatar;
 
+    /** 一句话简介 */
+    @TableField("bio")
+    private String bio;
+
     /** 角色 */
     @TableField("role")
     private String role;

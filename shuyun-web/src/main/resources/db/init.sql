@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS `user` (
     `username`    VARCHAR(50)  NOT NULL                COMMENT '用户名',
     `email`       VARCHAR(100) NOT NULL                COMMENT '邮箱',
     `password`    VARCHAR(255) NOT NULL                COMMENT '密码',
-    `avatar`      VARCHAR(255)          DEFAULT NULL   COMMENT '头像',
+    `avatar`      VARCHAR(255)          DEFAULT NULL    COMMENT '头像',
+    `bio`         VARCHAR(120)          DEFAULT NULL    COMMENT '一句话简介',
     `role`        VARCHAR(20)           DEFAULT 'USER' COMMENT '角色',
     `status`      TINYINT               DEFAULT 1      COMMENT '状态：0-禁用，1-正常',
     `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
@@ -416,3 +417,16 @@ UPDATE `culture` SET `related_scenic_ids` = '9,17,4', `video_url` = 'https://sea
 UPDATE `culture` SET `related_scenic_ids` = '5,9,10', `video_url` = 'https://search.bilibili.com/all?keyword=%E4%B8%89%E6%98%9F%E5%A0%86', `inheritors` = '冯汉骥|考古学家|三星堆早期考古研究的开拓者\n古蜀工匠|青铜文明创造者|留下青铜神树与纵目面具' WHERE `id` = 6;
 UPDATE `culture` SET `related_scenic_ids` = '14,8,7', `video_url` = 'https://search.bilibili.com/all?keyword=%E5%A4%A7%E7%86%8A%E7%8C%AB', `inheritors` = '胡锦矗|大熊猫研究奠基人|开创中国大熊猫野外生态研究\n张和民|大熊猫保护专家|长期扎根卧龙保护区' WHERE `id` = 7;
 UPDATE `culture` SET `related_scenic_ids` = '19,18,17', `video_url` = 'https://search.bilibili.com/all?keyword=%E5%9B%9B%E5%B7%9D%E7%99%BD%E9%85%92', `inheritors` = '赖高淮|酿酒大师|长期从事浓香型白酒酿造与技艺传承\n酿酒匠人|传统酿制技艺群体|以窖池与制曲工艺代代相传' WHERE `id` = 8;
+
+-- 16. user 扩展字段：一句话简介（仅首次执行时新增列）
+SET @has_bio := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'bio');
+SET @ddl_bio := IF(@has_bio = 0,
+                   'ALTER TABLE `user` ADD COLUMN `bio` VARCHAR(120) DEFAULT NULL COMMENT ''一句话简介'' AFTER `avatar`',
+                   'SELECT 1');
+PREPARE stmt_bio FROM @ddl_bio;
+EXECUTE stmt_bio;
+DEALLOCATE PREPARE stmt_bio;
+
+-- 17. 用户简介示例（可重复执行；仅本人可在个人中心修改）
+UPDATE `user` SET `bio` = '一步一步，把蜀地走成自己的地图' WHERE `bio` IS NULL;

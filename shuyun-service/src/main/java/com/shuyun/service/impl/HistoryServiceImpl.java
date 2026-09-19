@@ -112,6 +112,18 @@ public class HistoryServiceImpl extends ServiceImpl<UserViewHistoryMapper, UserV
         remove(Wrappers.<UserViewHistory>lambdaQuery().eq(UserViewHistory::getUserId, userId));
     }
 
+    @Override
+    public int countCities(Long userId) {
+        return (int) list(Wrappers.<UserViewHistory>lambdaQuery()
+                .eq(UserViewHistory::getUserId, userId)
+                .eq(UserViewHistory::getTargetType, TYPE_SCENIC))
+                .stream()
+                .map(UserViewHistory::getSubTitle)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .count();
+    }
+
     /**
      * 取市州名称；取不到时退回传入的兜底文案
      */

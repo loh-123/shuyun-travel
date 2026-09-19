@@ -4,6 +4,9 @@ target/
 !**/src/test/**/target/
 .kotlin
 
+### 上传文件（头像等）###
+upload/
+
 ### IntelliJ IDEA ###
 .idea/modules.xml
 .idea/jarRepositories.xml

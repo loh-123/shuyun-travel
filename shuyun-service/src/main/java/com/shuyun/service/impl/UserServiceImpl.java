@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * 用户业务实现
@@ -92,5 +94,53 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         updateById(update);
 
         log.info("用户修改密码：id={}", userId);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public User updateProfile(Long userId, String username, String email, String bio) {
+        User user = getById(userId);
+        if (user == null) {
+            throw new BusinessException("用户不存在");
+        }
+
+        // 用户名：非空且变化时才校验唯一性（排除自己）
+        if (StringUtils.hasText(username) && !username.equals(user.getUsername())) {
+            if (count(Wrappers.<User>lambdaQuery()
+                    .eq(User::getUsername, username)
+                    .ne(User::getId, userId)) > 0) {
+                throw new BusinessException("用户名已存在");
+            }
+            user.setUsername(username);
+        }
+
+        // 邮箱：同上
+        if (StringUtils.hasText(email) && !email.equals(user.getEmail())) {
+            if (count(Wrappers.<User>lambdaQuery()
+                    .eq(User::getEmail, email)
+                    .ne(User::getId, userId)) > 0) {
+                throw new BusinessException("邮箱已被使用");
+            }
+            user.setEmail(email);
+        }
+
+        if (bio != null) {
+            user.setBio(bio);
+        }
+
+        updateById(user);
+        // 返回前抹掉密码
+        user.setPassword(null);
+        log.info("用户修改资料：id={}", userId);
+        return user;
+    }
+
+    @Override
+    public void updateAvatar(Long userId, String avatarUrl) {
+        User update = new User();
+        update.setId(userId);
+        update.setAvatar(avatarUrl);
+        updateById(update);
+        log.info("用户更新头像：id={}, url={}", userId, avatarUrl);
     }
 }

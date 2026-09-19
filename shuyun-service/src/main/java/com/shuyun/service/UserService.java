@@ -43,4 +43,23 @@ public interface UserService extends IService<User> {
      * @param newPassword 新密码（明文）
      */
     void changePassword(Long userId, String oldPassword, String newPassword);
+
+    /**
+     * 修改资料（用户名 / 邮箱 / 一句话简介，均为可选）
+     *
+     * @param userId   用户ID
+     * @param username 新用户名（空则不改）
+     * @param email    新邮箱（空则不改）
+     * @param bio      新简介（null 则不改）
+     * @return 修改后的用户（不含密码）
+     */
+    User updateProfile(Long userId, String username, String email, String bio);
+
+    /**
+     * 更新头像地址
+     *
+     * @param userId    用户ID
+     * @param avatarUrl 头像可访问地址
+     */
+    void updateAvatar(Long userId, String avatarUrl);
 }
