@@ -19,18 +19,19 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { getLenis } from '@/composables/useLenis'
+import { locale, setLocale, t, type Locale } from '@/i18n'
 
 gsap.registerPlugin(ScrollTrigger)
 
 /* ------------------------------------------------------------
  * 常量
  * ---------------------------------------------------------- */
-/** 主导航 */
+/** 主导航（label 存 i18n 的 key，模板里用 t() 取词） */
 const MENUS = [
-  { label: '首页', path: '/' },
-  { label: '景点', path: '/scenic' },
-  { label: '文化', path: '/culture' },
-  { label: 'AI管家', path: '/assistant' },
+  { label: 'nav.home', path: '/' },
+  { label: 'nav.scenic', path: '/scenic' },
+  { label: 'nav.culture', path: '/culture' },
+  { label: 'nav.assistant', path: '/assistant' },
 ]
 
 /** 有整屏 Hero 的路由前缀（导航栏在这些页面顶部透明悬浮） */
@@ -38,35 +39,41 @@ const HERO_PREFIXES = ['/scenic', '/culture', '/profile']
 
 /** 快速导航 */
 const QUICK_LINKS = [
-  { label: '首页', path: '/' },
-  { label: '景点', path: '/scenic' },
-  { label: '文化', path: '/culture' },
-  { label: 'AI管家', path: '/assistant' },
-  { label: '个人中心', path: '/profile' },
+  { label: 'nav.home', path: '/' },
+  { label: 'nav.scenic', path: '/scenic' },
+  { label: 'nav.culture', path: '/culture' },
+  { label: 'nav.assistant', path: '/assistant' },
+  { label: 'nav.profile', path: '/profile' },
 ]
 
 /** 资源中心（暂为占位入口，点击给出行提示） */
-const RESOURCES = ['景点大全', '文化图谱', '川味地图', '非遗名录', '帮助中心']
+const RESOURCES = [
+  'footer.res.scenic',
+  'footer.res.culture',
+  'footer.res.food',
+  'footer.res.heritage',
+  'footer.res.help',
+]
 
 /** 友情链接 */
-const FRIEND_LINKS = ['四川省文化和旅游厅', '成都文旅', '四川非遗']
+const FRIEND_LINKS = ['footer.friend1', 'footer.friend2', 'footer.friend3']
 
 /** 社交图标（内联 SVG，保持线性 1.5px 风格） */
 const SOCIALS = [
   {
-    name: '微信',
+    name: 'wechat',
     svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4.5C5.4 4.5 2.5 6.9 2.5 9.8c0 1.7.9 3.2 2.4 4.2L4.2 16.6l2.6-1.3c.7.2 1.4.3 2.2.3"/><path d="M15 8.2c3.3 0 6 2.2 6 4.9 0 1.5-.8 2.8-2.1 3.7l.5 2.2-2.4-1.2c-.6.2-1.3.3-2 .3-3.3 0-6-2.2-6-4.9S11.7 8.2 15 8.2z"/></svg>',
   },
   {
-    name: '微博',
+    name: 'weibo',
     svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13c0-3.3 3.1-6 7-6 3.9 0 7 2.7 7 6s-3.1 6-7 6c-3.9 0-7-2.7-7-6z"/><circle cx="10" cy="13" r="2.2"/><path d="M17.5 4.5c2 0 3.5 1.5 3.5 3.5"/></svg>',
   },
   {
-    name: 'B站',
+    name: 'bilibili',
     svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="12" rx="3"/><path d="M7.5 3.5 10 7M16.5 3.5 14 7M9 12v2M15 12v2"/></svg>',
   },
   {
-    name: '小红书',
+    name: 'red',
     svg: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="4.5" y="3" width="15" height="18" rx="3"/><path d="M9 8.5h6M9 12h6M9 15.5h3.5"/></svg>',
   },
 ]
@@ -87,9 +94,6 @@ const drawerOpen = ref(false)
 const searchOpen = ref(false)
 const userMenuOpen = ref(false)
 const langMenuOpen = ref(false)
-
-/** 语言：zh / en（当前仅记忆偏好，文案暂为中文） */
-const lang = ref<'zh' | 'en'>('zh')
 
 /** 搜索 */
 interface SearchCity {
@@ -321,14 +325,11 @@ watch(keyword, (kw) => {
   }, 300)
 })
 
-/** 语言切换（暂只记忆偏好） */
-function switchLang(next: 'zh' | 'en') {
-  lang.value = next
-  localStorage.setItem('shuyun_lang', next)
+/** 语言切换（界面文案，景点/文化正文保留中文原文） */
+function switchLang(next: Locale) {
+  setLocale(next)
   langMenuOpen.value = false
-  if (next === 'en') {
-    ElMessage.info('English 版本正在准备中，已记住你的偏好')
-  }
+  ElMessage.info(t(next === 'en' ? 'lang.toEn' : 'lang.toZh'))
 }
 
 function logout() {
@@ -370,20 +371,20 @@ function toTop() {
 }
 
 function resourceTip(name: string) {
-  ElMessage.info(`「${name}」正在建设中`)
+  ElMessage.info(t('lang.tip', { name }))
 }
 
 /** 资源中心入口：能跳的跳，其余给出建设提示 */
-function onResource(name: string) {
-  if (name === '景点大全') {
+function onResource(key: string) {
+  if (key === 'footer.res.scenic') {
     go('/scenic')
     return
   }
-  if (name === '文化图谱') {
+  if (key === 'footer.res.culture') {
     go('/culture')
     return
   }
-  resourceTip(name)
+  resourceTip(t(key))
 }
 
 /* ------------------------------------------------------------
@@ -394,7 +395,6 @@ onMounted(() => {
   document.addEventListener('click', onDocClick)
   document.addEventListener('keydown', onKeydown)
 
-  lang.value = (localStorage.getItem('shuyun_lang') as 'zh' | 'en') || 'zh'
   onScroll()
 
   // 页脚四栏从左到右依次淡入
@@ -440,7 +440,7 @@ watch(
         <!-- Logo：篆刻印章 + 品牌名 -->
         <div class="nav__logo" @click="go('/')">
           <span class="nav__seal">蜀</span>
-          <span class="nav__brand">蜀韵·智游</span>
+          <span class="nav__brand">{{ t('app.name') }}</span>
         </div>
 
         <!-- 主导航 -->
@@ -452,7 +452,7 @@ watch(
             :class="{ 'is-active': isActive(m.path) }"
             @click="go(m.path)"
           >
-            <span class="nav__item-text">{{ m.label }}</span>
+            <span class="nav__item-text">{{ t(m.label) }}</span>
             <span class="nav__item-line" aria-hidden="true" />
             <span class="nav__item-dot" aria-hidden="true" />
           </a>
@@ -461,7 +461,7 @@ watch(
         <!-- 右侧操作区 -->
         <div class="nav__actions">
           <!-- 搜索 -->
-          <button type="button" class="nav__icon" title="搜索（景点 / 城市）" @click="openSearch">
+          <button type="button" class="nav__icon" :title="t('nav.searchTitle')" @click="openSearch">
             <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
               <circle cx="11" cy="11" r="6" />
               <path d="M20 20l-4.3-4.3" />
@@ -473,21 +473,21 @@ watch(
             <button
               type="button"
               class="nav__icon nav-lang__btn"
-              :title="lang === 'zh' ? '当前：中文' : 'Current: English'"
+              :title="t(locale === 'zh' ? 'nav.langCurrentZh' : 'nav.langCurrentEn')"
               @click.stop="langMenuOpen = !langMenuOpen"
             >
-              <span class="nav-lang__text">{{ lang === 'zh' ? '中' : 'EN' }}</span>
+              <span class="nav-lang__text">{{ locale === 'zh' ? '中' : 'EN' }}</span>
               <svg class="nav-lang__caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
             </button>
             <transition name="nav-drop">
               <div v-if="langMenuOpen" class="nav-drop nav-lang__menu">
-                <button type="button" :class="{ 'is-on': lang === 'zh' }" @click="switchLang('zh')">
-                  中文 <em>ZH</em>
+                <button type="button" :class="{ 'is-on': locale === 'zh' }" @click="switchLang('zh')">
+                  {{ t('nav.langZh') }} <em>ZH</em>
                 </button>
-                <button type="button" :class="{ 'is-on': lang === 'en' }" @click="switchLang('en')">
-                  English <em>EN</em>
+                <button type="button" :class="{ 'is-on': locale === 'en' }" @click="switchLang('en')">
+                  {{ t('nav.langEn') }} <em>EN</em>
                 </button>
               </div>
             </transition>
@@ -495,7 +495,7 @@ watch(
 
           <!-- 用户 -->
           <div v-if="userStore.isLogin" class="nav-user">
-            <button type="button" class="nav-user__btn" title="账号" @click.stop="userMenuOpen = !userMenuOpen">
+            <button type="button" class="nav-user__btn" :title="t('nav.accountTitle')" @click.stop="userMenuOpen = !userMenuOpen">
               <img v-if="avatarUrl" class="nav-user__avatar" :src="avatarUrl" alt="" />
               <span v-else class="nav-user__avatar nav-user__avatar--text">{{ initial }}</span>
             </button>
@@ -510,19 +510,19 @@ watch(
                     <em>{{ userStore.user?.email }}</em>
                   </span>
                 </div>
-                <button type="button" @click="go('/profile')">个人中心</button>
-                <button type="button" @click="goProfile('trips')">我的行程</button>
-                <button type="button" @click="goProfile('collection')">我的收藏</button>
+                <button type="button" @click="go('/profile')">{{ t('nav.profile') }}</button>
+                <button type="button" @click="goProfile('trips')">{{ t('nav.trips') }}</button>
+                <button type="button" @click="goProfile('collection')">{{ t('nav.collection') }}</button>
                 <span class="nav-drop__sep" />
-                <button type="button" class="is-danger" @click="logout">退出登录</button>
+                <button type="button" class="is-danger" @click="logout">{{ t('nav.logout') }}</button>
               </div>
             </transition>
           </div>
 
-          <button v-else type="button" class="nav__login" @click="go('/login')">登录</button>
+          <button v-else type="button" class="nav__login" @click="go('/login')">{{ t('nav.login') }}</button>
 
           <!-- 汉堡按钮（小屏） -->
-          <button type="button" class="nav__burger" title="菜单" @click="drawerOpen = true">
+          <button type="button" class="nav__burger" :title="t('nav.menuTitle')" @click="drawerOpen = true">
             <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
               <path d="M4 7h16M4 12h16M4 17h16" />
             </svg>
@@ -548,11 +548,11 @@ watch(
         <div class="footer__col footer__col--brand">
           <div class="footer__logo">
             <span class="footer__seal">蜀</span>
-            <span class="footer__name">蜀韵·智游</span>
+            <span class="footer__name">{{ t('app.name') }}</span>
           </div>
-          <p class="footer__slogan">AI 懂你的巴蜀旅行管家</p>
+          <p class="footer__slogan">{{ t('footer.slogan') }}</p>
           <ul class="socials">
-            <li v-for="s in SOCIALS" :key="s.name" :title="s.name">
+            <li v-for="s in SOCIALS" :key="s.name" :title="t(`social.${s.name}`)">
               <span class="socials__icon" v-html="s.svg" />
             </li>
           </ul>
@@ -560,42 +560,42 @@ watch(
 
         <!-- 2. 快速导航 -->
         <div class="footer__col">
-          <h4 class="footer__title">快速导航</h4>
+          <h4 class="footer__title">{{ t('footer.quick') }}</h4>
           <ul class="footer__list">
             <li v-for="l in QUICK_LINKS" :key="l.path" class="is-link" @click="go(l.path)">
-              {{ l.label }}
+              {{ t(l.label) }}
             </li>
           </ul>
         </div>
 
         <!-- 3. 资源中心 -->
         <div class="footer__col">
-          <h4 class="footer__title">资源中心</h4>
+          <h4 class="footer__title">{{ t('footer.resource') }}</h4>
           <ul class="footer__list">
             <li v-for="r in RESOURCES" :key="r" class="is-link" @click="onResource(r)">
-              {{ r }}
+              {{ t(r) }}
             </li>
           </ul>
         </div>
 
         <!-- 4. 联系我们 -->
         <div class="footer__col">
-          <h4 class="footer__title">联系我们</h4>
+          <h4 class="footer__title">{{ t('footer.contact') }}</h4>
           <ul class="footer__list footer__list--contact">
-            <li>邮箱：hello@shuyun-travel.com</li>
-            <li>电话：028-8888 8888</li>
-            <li>地址：四川省成都市武侯区</li>
-            <li>备案：蜀ICP备2026000000号</li>
+            <li>{{ t('footer.email') }}: hello@shuyun-travel.com</li>
+            <li>{{ t('footer.phone') }}: 028-8888 8888</li>
+            <li>{{ t('footer.address') }}: {{ t('footer.addressValue') }}</li>
+            <li>{{ t('footer.icp') }}: {{ t('footer.icpValue') }}</li>
           </ul>
         </div>
       </div>
 
       <div class="footer__bottom">
-        <p class="footer__copy">© 2026 蜀韵·智游 shuyun-travel · 保留所有权利</p>
-        <p class="footer__icp">蜀ICP备2026000000号 · 川公网安备 51010000000000号</p>
+        <p class="footer__copy">{{ t('footer.copyright') }}</p>
+        <p class="footer__icp">{{ t('footer.icpValue') }}</p>
         <p class="footer__friends">
-          友情链接：
-          <a v-for="f in FRIEND_LINKS" :key="f" href="javascript:;">{{ f }}</a>
+          {{ t('footer.friends') }}
+          <a v-for="f in FRIEND_LINKS" :key="f" href="javascript:;">{{ t(f) }}</a>
         </p>
       </div>
     </footer>
@@ -615,7 +615,7 @@ watch(
                 v-model="keyword"
                 class="search__input"
                 type="text"
-                placeholder="搜索景点、市州、文化（如 九寨沟 / 成都 / 川剧）"
+                :placeholder="t('search.placeholder')"
                 @keydown="onSearchKeydown"
               />
               <button type="button" class="search__esc" @click="searchOpen = false">ESC</button>
@@ -625,7 +625,7 @@ watch(
             <div v-if="keyword" class="search__body">
               <!-- 市州 -->
               <section v-if="searchResult.cities.length" class="search__group">
-                <p class="search__group-title">市州</p>
+                <p class="search__group-title">{{ t('search.city') }}</p>
                 <ul class="search__list">
                   <li
                     v-for="c in searchResult.cities"
@@ -636,7 +636,7 @@ watch(
                     <span class="search__badge">州</span>
                     <span class="search__info">
                       <b v-html="highlight(c.name, keyword.trim())" />
-                      <em>共 {{ c.count }} 个景点</em>
+                      <em>{{ t('search.cityCount', { count: c.count }) }}</em>
                     </span>
                     <span class="search__arrow">→</span>
                   </li>
@@ -646,8 +646,8 @@ watch(
               <!-- 景点 -->
               <section v-if="searchResult.scenics.length" class="search__group">
                 <p class="search__group-title">
-                  景点
-                  <button type="button" class="search__more" @click="viewAllScenics">查看全部 →</button>
+                  {{ t('search.scenic') }}
+                  <button type="button" class="search__more" @click="viewAllScenics">{{ t('search.viewAll') }}</button>
                 </p>
                 <ul class="search__list">
                   <li
@@ -668,7 +668,7 @@ watch(
 
               <!-- 文化 -->
               <section v-if="searchResult.cultures.length" class="search__group">
-                <p class="search__group-title">文化</p>
+                <p class="search__group-title">{{ t('search.culture') }}</p>
                 <ul class="search__list">
                   <li
                     v-for="c in searchResult.cultures"
@@ -686,18 +686,18 @@ watch(
                 </ul>
               </section>
 
-              <p v-if="searching" class="search__empty">正在搜索…</p>
-              <p v-else-if="!hasResult" class="search__empty">没有找到「{{ keyword }}」相关的内容</p>
+              <p v-if="searching" class="search__empty">{{ t('search.searching') }}</p>
+              <p v-else-if="!hasResult" class="search__empty">{{ t('search.empty', { keyword }) }}</p>
 
-              <p class="search__hint">↑↓ 选择 · Enter 打开 · Esc 关闭</p>
+              <p class="search__hint">{{ t('search.hint') }}</p>
             </div>
 
             <!-- ---------- 无输入：历史 + 热门 ---------- -->
             <div v-else class="search__body">
               <section v-if="searchHistory.length" class="search__group">
                 <p class="search__group-title">
-                  最近搜索
-                  <button type="button" class="search__more" @click="clearHistory">清空</button>
+                  {{ t('search.recent') }}
+                  <button type="button" class="search__more" @click="clearHistory">{{ t('search.clear') }}</button>
                 </p>
                 <div class="search__chips">
                   <button v-for="h in searchHistory" :key="h" type="button" @click="searchBy(h)">
@@ -707,15 +707,15 @@ watch(
               </section>
 
               <section class="search__group">
-                <p class="search__group-title">热门搜索</p>
+                <p class="search__group-title">{{ t('search.hot') }}</p>
                 <div class="search__chips">
                   <button
-                    v-for="t in hotKeywords.length ? hotKeywords : ['九寨沟', '三星堆', '大熊猫', '都江堰']"
-                    :key="t"
+                    v-for="word in hotKeywords.length ? hotKeywords : ['九寨沟', '三星堆', '大熊猫', '都江堰']"
+                    :key="word"
                     type="button"
-                    @click="searchBy(t)"
+                    @click="searchBy(word)"
                   >
-                    {{ t }}
+                    {{ word }}
                   </button>
                 </div>
               </section>
@@ -740,7 +740,7 @@ watch(
           <div class="drawer__inner">
             <div class="drawer__logo">
               <span class="drawer__seal">蜀</span>
-              <span class="drawer__name">蜀韵·智游</span>
+              <span class="drawer__name">{{ t('app.name') }}</span>
             </div>
 
             <nav class="drawer__menu">
@@ -752,7 +752,7 @@ watch(
                 :class="{ 'is-active': isActive(m.path) }"
                 @click="go(m.path)"
               >
-                {{ m.label }}
+                {{ t(m.label) }}
               </button>
             </nav>
 
@@ -763,9 +763,9 @@ watch(
                   <span v-else class="drawer__avatar drawer__avatar--text">{{ initial }}</span>
                   {{ userStore.user?.username }}
                 </button>
-                <button type="button" class="drawer__logout" @click="logout">退出登录</button>
+                <button type="button" class="drawer__logout" @click="logout">{{ t('nav.logout') }}</button>
               </template>
-              <button v-else type="button" class="drawer__login" @click="go('/login')">登录 / 注册</button>
+              <button v-else type="button" class="drawer__login" @click="go('/login')">{{ t('nav.register') }}</button>
             </div>
           </div>
         </div>
@@ -774,7 +774,7 @@ watch(
 
     <!-- ================= 回到顶部 ================= -->
     <transition name="drop-fade">
-      <button v-if="showTop" type="button" class="to-top" title="回到顶部" @click="toTop">
+      <button v-if="showTop" type="button" class="to-top" :title="t('common.backTop')" @click="toTop">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 19V5M6 11l6-6 6 6" />
         </svg>

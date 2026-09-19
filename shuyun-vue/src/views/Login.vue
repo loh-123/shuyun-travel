@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import { t } from '@/i18n'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -32,7 +33,7 @@ function toggleMode() {
 
 async function onLogin() {
   if (!loginForm.account || !loginForm.password) {
-    ElMessage.warning('请输入账号和密码')
+    ElMessage.warning(t('login.needAccount'))
     return
   }
   loading.value = true
@@ -41,7 +42,7 @@ async function onLogin() {
     const res = await request.post('/auth/login', { ...loginForm })
     userStore.setToken(res.data.token)
     userStore.setUser(res.data.user)
-    ElMessage.success('登录成功')
+    ElMessage.success(t('login.success'))
     router.push('/')
   } finally {
     loading.value = false
@@ -50,13 +51,13 @@ async function onLogin() {
 
 async function onRegister() {
   if (!registerForm.username || !registerForm.email || !registerForm.password) {
-    ElMessage.warning('请填写完整的注册信息')
+    ElMessage.warning(t('login.needAll'))
     return
   }
   loading.value = true
   try {
     await request.post('/auth/register', { ...registerForm })
-    ElMessage.success('注册成功，请登录')
+    ElMessage.success(t('login.registerSuccess'))
     // 注册成功后自动切回登录模式，并回填用户名
     loginForm.account = registerForm.username
     loginForm.password = ''
@@ -79,19 +80,19 @@ async function onRegister() {
       </div>
 
       <div class="auth__poem">
-        <p class="auth__poem-line">九天开出一成都</p>
-        <p class="auth__poem-line">万户千门入画图</p>
-        <span class="auth__poem-from">—— 李白《上皇西巡南京歌》</span>
+        <p class="auth__poem-line">{{ t('login.poem1') }}</p>
+        <p class="auth__poem-line">{{ t('login.poem2') }}</p>
+        <span class="auth__poem-from">{{ t('login.poemFrom') }}</span>
       </div>
     </div>
 
     <!-- ---------- 右侧：表单 ---------- -->
     <div class="auth__right">
       <div class="auth__card">
-        <p class="auth__eyebrow">Shuyun · Zhiyou</p>
-        <h2 class="auth__title">{{ mode === 'login' ? '欢迎回来' : '创建账号' }}</h2>
+        <p class="auth__eyebrow">{{ t('login.eyebrow') }}</p>
+        <h2 class="auth__title">{{ t(mode === 'login' ? 'login.welcome' : 'login.create') }}</h2>
         <p class="auth__tip">
-          {{ mode === 'login' ? '登录蜀韵·智游，开启智能旅程' : '注册后即可收藏、规划与对话' }}
+          {{ t(mode === 'login' ? 'login.tipLogin' : 'login.tipRegister') }}
         </p>
 
         <!-- 登录 -->
@@ -99,14 +100,14 @@ async function onRegister() {
           <el-input
             v-model="loginForm.account"
             size="large"
-            placeholder="用户名 / 邮箱"
+            :placeholder="t('login.account')"
             class="auth__field"
           />
           <el-input
             v-model="loginForm.password"
             type="password"
             size="large"
-            placeholder="密码"
+            :placeholder="t('login.password')"
             show-password
             class="auth__field"
             @keyup.enter="onLogin"
@@ -119,11 +120,11 @@ async function onRegister() {
             :loading="loading"
             @click="onLogin"
           >
-            登 录
+            {{ t('login.submit') }}
           </el-button>
           <div class="auth__switch">
-            <span>没有账号？</span>
-            <el-button link type="primary" @click="toggleMode">去注册</el-button>
+            <span>{{ t('login.noAccount') }}</span>
+            <el-button link type="primary" @click="toggleMode">{{ t('login.goRegister') }}</el-button>
           </div>
         </template>
 
@@ -132,20 +133,20 @@ async function onRegister() {
           <el-input
             v-model="registerForm.username"
             size="large"
-            placeholder="用户名"
+            :placeholder="t('login.username')"
             class="auth__field"
           />
           <el-input
             v-model="registerForm.email"
             size="large"
-            placeholder="邮箱"
+            :placeholder="t('login.email')"
             class="auth__field"
           />
           <el-input
             v-model="registerForm.password"
             type="password"
             size="large"
-            placeholder="密码"
+            :placeholder="t('login.password')"
             show-password
             class="auth__field"
             @keyup.enter="onRegister"
@@ -158,11 +159,11 @@ async function onRegister() {
             :loading="loading"
             @click="onRegister"
           >
-            注 册
+            {{ t('login.register') }}
           </el-button>
           <div class="auth__switch">
-            <span>已有账号？</span>
-            <el-button link type="primary" @click="toggleMode">去登录</el-button>
+            <span>{{ t('login.hasAccount') }}</span>
+            <el-button link type="primary" @click="toggleMode">{{ t('login.goLogin') }}</el-button>
           </div>
         </template>
       </div>

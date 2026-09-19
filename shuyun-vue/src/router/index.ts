@@ -4,6 +4,7 @@ import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 
 import { getLenis } from '@/composables/useLenis'
+import { applyTitle } from '@/i18n'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -93,8 +94,8 @@ router.beforeEach((to, from, next) => {
 
 router.afterEach((to) => {
   NProgress.done()
-  const title = to.meta?.title as string | undefined
-  document.title = title ? `${title} · 蜀韵·智游` : '蜀韵·智游 · AI 懂你的巴蜀旅行管家'
+  // 标题走 i18n，切换语言时会自动重写（见 src/i18n/index.ts）
+  applyTitle(String(to.name ?? ''))
 })
 
 router.onError(() => {
