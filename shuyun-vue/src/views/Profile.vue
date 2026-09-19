@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import GoldButton from '@/components/common/GoldButton.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -289,6 +290,263 @@ function goScenic(id: number) {
   router.push(`/scenic/${id}`)
 }
 
+/* ------------------------------------------------------------
+ * 浏览足迹
+ * ---------------------------------------------------------- */
+interface HistoryItem {
+  id: number
+  targetType: string
+  targetId: number
+  targetName?: string
+  coverImage?: string
+  subTitle?: string
+  viewTime?: string
+}
+
+const history = ref<HistoryItem[]>([])
+const loadingHistory = ref(false)
+const historyTotal = ref(0)
+
+async function loadHistory() {
+  if (!userStore.isLogin) {
+    return
+  }
+  loadingHistory.value = true
+  try {
+    const res = await request.get('/user/history', { silent: true, params: { page: 1, size: 12 } })
+    history.value = res.data?.records ?? []
+    historyTotal.value = res.data?.total ?? 0
+  } catch {
+    history.value = []
+    historyTotal.value = 0
+  } finally {
+    loadingHistory.value = false
+  }
+}
+
+async function removeHistory(item: HistoryItem) {
+  try {
+    await request.delete(`/user/history/${item.id}`)
+    history.value = history.value.filter((h) => h.id !== item.id)
+    historyTotal.value = Math.max(0, historyTotal.value - 1)
+    ElMessage.success('已移除该足迹')
+  } catch {
+    // 错误提示由响应拦截器统一处理
+  }
+}
+
+async function clearHistory() {
+  try {
+    await ElMessageBox.confirm('确定清空全部浏览足迹吗？清空后不可恢复。', '提示', {
+      type: 'warning',
+      confirmButtonText: '清空',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await request.delete('/user/history')
+    history.value = []
+    historyTotal.value = 0
+    ElMessage.success('足迹已清空')
+  } catch {
+    // 错误提示由响应拦截器统一处理
+  }
+}
+
+function goHistory(item: HistoryItem) {
+  router.push(item.targetType === 'CULTURE' ? `/culture/${item.targetId}` : `/scenic/${item.targetId}`)
+}
+
+/** 解析后端 LocalDateTime 字符串（兼容各浏览器） */
+function parseTime(time?: string) {
+  if (!time) {
+    return 0
+  }
+  const normalized = time.replace('T', ' ').replace(/-/g, '/').split('.')[0]
+  const stamp = new Date(normalized).getTime()
+  return Number.isNaN(stamp) ? 0 : stamp
+}
+
+/** 相对时间：刚刚 / n 分钟前 / n 小时前 / 昨天 / n 天前 / 月日 */
+function relativeTime(time?: string) {
+  const stamp = parseTime(time)
+  if (!stamp) {
+    return ''
+  }
+  const minutes = Math.floor((Date.now() - stamp) / 60000)
+  if (minutes < 1) {
+    return '刚刚'
+  }
+  if (minutes < 60) {
+    return `${minutes} 分钟前`
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours} 小时前`
+  }
+  const days = Math.floor(hours / 24)
+  if (days === 1) {
+    return '昨天'
+  }
+  if (days < 30) {
+    return `${days} 天前`
+  }
+  const d = new Date(stamp)
+  return `${d.getMonth() + 1} 月 ${d.getDate()} 日`
+}
+
+/** 足迹的「最近浏览」文案 */
+const lastViewText = computed(() => relativeTime(history.value[0]?.viewTime) || '—')
+
+/* ------------------------------------------------------------
+ * 旅行笔记
+ * ---------------------------------------------------------- */
+interface NoteItem {
+  id: number
+  title?: string
+  content?: string
+  targetName?: string
+  tags?: string
+  updateTime?: string
+}
+
+const notes = ref<NoteItem[]>([])
+const loadingNotes = ref(false)
+const noteKeyword = ref('')
+const noteStats = reactive({ count: 0, chars: 0 })
+
+const noteDialog = ref(false)
+const savingNote = ref(false)
+const noteForm = reactive({
+  id: null as number | null,
+  title: '',
+  content: '',
+  targetName: '',
+  tags: '',
+})
+
+/** 可关联的景点候选：来自浏览足迹里的景点 */
+const spotOptions = computed(() =>
+  Array.from(
+    new Set(
+      history.value
+        .filter((h) => h.targetType === 'SCENIC')
+        .map((h) => h.targetName)
+        .filter(Boolean) as string[],
+    ),
+  ),
+)
+
+async function loadNotes() {
+  if (!userStore.isLogin) {
+    return
+  }
+  loadingNotes.value = true
+  try {
+    const res = await request.get('/user/note', {
+      silent: true,
+      params: { keyword: noteKeyword.value || undefined, page: 1, size: 12 },
+    })
+    notes.value = res.data?.records ?? []
+  } catch {
+    notes.value = []
+  } finally {
+    loadingNotes.value = false
+  }
+  loadNoteSummary()
+}
+
+async function loadNoteSummary() {
+  try {
+    const res = await request.get('/user/note/summary', { silent: true })
+    noteStats.count = res.data?.count ?? 0
+    noteStats.chars = res.data?.chars ?? 0
+  } catch {
+    noteStats.count = 0
+    noteStats.chars = 0
+  }
+}
+
+function openNote(item?: NoteItem) {
+  noteForm.id = item?.id ?? null
+  noteForm.title = item?.title ?? ''
+  noteForm.content = item?.content ?? ''
+  noteForm.targetName = item?.targetName ?? ''
+  noteForm.tags = item?.tags ?? ''
+  noteDialog.value = true
+}
+
+async function saveNote() {
+  if (!noteForm.title.trim() && !noteForm.content.trim()) {
+    ElMessage.warning('标题和正文不能同时为空')
+    return
+  }
+  savingNote.value = true
+  try {
+    const payload = {
+      title: noteForm.title || null,
+      content: noteForm.content || null,
+      targetType: null,
+      targetId: null,
+      targetName: noteForm.targetName || null,
+      tags: noteForm.tags || null,
+    }
+    if (noteForm.id) {
+      await request.put(`/user/note/${noteForm.id}`, payload)
+    } else {
+      await request.post('/user/note', payload)
+    }
+    ElMessage.success('已保存')
+    noteDialog.value = false
+    await loadNotes()
+  } finally {
+    savingNote.value = false
+  }
+}
+
+async function removeNote(item: NoteItem) {
+  try {
+    await ElMessageBox.confirm(`确定删除笔记「${item.title || '未命名笔记'}」吗？`, '提示', {
+      type: 'warning',
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
+  try {
+    await request.delete(`/user/note/${item.id}`)
+    ElMessage.success('已删除')
+    await loadNotes()
+  } catch {
+    // 错误提示由响应拦截器统一处理
+  }
+}
+
+/** 标签拆分 */
+function splitNoteTags(tags?: string) {
+  return (tags || '')
+    .split(',')
+    .map((t) => t.trim())
+    .filter(Boolean)
+}
+
+/** 切换菜单时按需加载 */
+watch(active, (key) => {
+  if (!userStore.isLogin) {
+    return
+  }
+  if (key === 'history' && !history.value.length) {
+    loadHistory()
+  }
+  if (key === 'notes' && !notes.value.length) {
+    loadHistory()
+    loadNotes()
+  }
+})
+
 onMounted(() => {
   if (userStore.isLogin) {
     loadProfile()
@@ -421,16 +679,130 @@ onMounted(() => {
           </template>
         </template>
 
-        <!-- 浏览历史 -->
+        <!-- 浏览足迹：时间轴 -->
         <template v-else-if="active === 'history'">
-          <h2 class="content__title">浏览历史</h2>
-          <el-empty description="暂无浏览记录" />
+          <div class="content__head">
+            <h2 class="content__title">浏览足迹</h2>
+            <el-button v-if="history.length" link type="danger" @click="clearHistory">
+              清空足迹
+            </el-button>
+          </div>
+
+          <div v-if="!userStore.isLogin" class="content__guest">
+            <el-empty description="登录后可查看你的浏览足迹" />
+            <GoldButton @click="router.push('/login')">去登录</GoldButton>
+          </div>
+
+          <template v-else>
+            <!-- 统计条 -->
+            <div v-if="historyTotal" class="foot-stat">
+              <div class="foot-stat__cell">
+                <b>{{ historyTotal }}</b>
+                <span>处足迹</span>
+              </div>
+              <i class="foot-stat__line" />
+              <div class="foot-stat__cell">
+                <b class="foot-stat__small">{{ lastViewText }}</b>
+                <span>最近浏览</span>
+              </div>
+            </div>
+
+            <!-- 时间轴 -->
+            <ol v-loading="loadingHistory" class="foot">
+              <li v-for="item in history" :key="item.id" class="foot__item">
+                <span class="foot__node" aria-hidden="true" />
+
+                <button type="button" class="foot__card" @click="goHistory(item)">
+                  <img class="foot__cover" :src="item.coverImage" alt="" loading="lazy" />
+                  <div class="foot__info">
+                    <h3 class="foot__name">{{ item.targetName }}</h3>
+                    <p class="foot__sub">
+                      {{ item.subTitle }}
+                      <em>{{ item.targetType === 'CULTURE' ? '· 文化' : '· 景点' }}</em>
+                    </p>
+                    <span class="foot__time">{{ relativeTime(item.viewTime) }}</span>
+                  </div>
+                  <span class="foot__arrow">→</span>
+                </button>
+
+                <button type="button" class="foot__del" @click.stop="removeHistory(item)">
+                  移除
+                </button>
+              </li>
+            </ol>
+
+            <el-empty
+              v-if="!loadingHistory && !history.length"
+              description="还没有浏览记录，去景点逛逛吧"
+            >
+              <GoldButton @click="router.push('/scenic')">去逛景点</GoldButton>
+            </el-empty>
+          </template>
         </template>
 
-        <!-- 我的笔记 -->
+        <!-- 我的笔记：便签墙 -->
         <template v-else-if="active === 'notes'">
-          <h2 class="content__title">我的笔记</h2>
-          <el-empty description="笔记功能开发中，敬请期待" />
+          <div class="content__head">
+            <h2 class="content__title">我的笔记</h2>
+            <GoldButton v-if="userStore.isLogin" size="sm" @click="openNote()">写笔记</GoldButton>
+          </div>
+
+          <div v-if="!userStore.isLogin" class="content__guest">
+            <el-empty description="登录后可记录你的旅行笔记" />
+            <GoldButton @click="router.push('/login')">去登录</GoldButton>
+          </div>
+
+          <template v-else>
+            <!-- 统计 + 搜索 -->
+            <div class="note-bar">
+              <p class="note-bar__stat">
+                共 <b>{{ noteStats.count }}</b> 篇 · 累计 <b>{{ noteStats.chars }}</b> 字
+              </p>
+
+              <label class="note-bar__search">
+                <input
+                  v-model="noteKeyword"
+                  type="text"
+                  placeholder="搜索标题 / 正文 / 标签"
+                  @keyup.enter="loadNotes"
+                />
+                <span class="note-bar__line" />
+              </label>
+            </div>
+
+            <!-- 便签墙 -->
+            <div v-loading="loadingNotes" class="notes">
+              <article
+                v-for="(item, i) in notes"
+                :key="item.id"
+                class="note"
+                :class="`note--r${i % 3}`"
+                @click="openNote(item)"
+              >
+                <span class="note__pin" aria-hidden="true" />
+                <h3 class="note__title">{{ item.title || '未命名笔记' }}</h3>
+                <p class="note__content">{{ item.content }}</p>
+
+                <div v-if="splitNoteTags(item.tags).length" class="note__tags">
+                  <span v-for="t in splitNoteTags(item.tags)" :key="t" class="note__tag">{{ t }}</span>
+                </div>
+
+                <footer class="note__foot">
+                  <span v-if="item.targetName" class="note__linked">关联 · {{ item.targetName }}</span>
+                  <span class="note__date">{{ relativeTime(item.updateTime) }}</span>
+                </footer>
+
+                <button type="button" class="note__del" @click.stop="removeNote(item)">删除</button>
+              </article>
+            </div>
+
+            <el-empty
+              v-if="!loadingNotes && !notes.length"
+              description="还没有笔记，写下第一段旅程吧"
+            >
+              <GoldButton @click="openNote()">写笔记</GoldButton>
+            </el-empty>
+          </template>
         </template>
 
         <!-- 账号设置 -->
@@ -528,11 +900,59 @@ onMounted(() => {
         <el-button type="primary" :loading="savingTrip" @click="saveTrip">保存</el-button>
       </template>
     </el-dialog>
+
+    <!-- ============ 笔记编辑弹窗 ============ -->
+    <el-dialog
+      v-model="noteDialog"
+      :title="noteForm.id ? '编辑笔记' : '写笔记'"
+      width="640px"
+      top="8vh"
+    >
+      <div class="note-form">
+        <el-input
+          v-model="noteForm.title"
+          size="large"
+          maxlength="60"
+          show-word-limit
+          placeholder="标题（如：九寨沟的第一天）"
+        />
+
+        <el-input
+          v-model="noteForm.content"
+          type="textarea"
+          :rows="8"
+          resize="none"
+          placeholder="写下此刻的心情、路线、花费，或一句诗……"
+        />
+
+        <div class="note-form__row">
+          <el-select
+            v-model="noteForm.targetName"
+            class="note-form__select"
+            placeholder="关联景点（可选）"
+            clearable
+            filterable
+            allow-create
+            default-first-option
+          >
+            <el-option v-for="s in spotOptions" :key="s" :label="s" :value="s" />
+          </el-select>
+
+          <el-input v-model="noteForm.tags" placeholder="标签，用逗号分隔（可选）" />
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="noteDialog = false">取消</el-button>
+        <el-button type="primary" :loading="savingNote" @click="saveNote">保存</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
+@use '@/styles/mixins' as *;
 
 .profile {
   width: 100%;
@@ -980,6 +1400,404 @@ onMounted(() => {
     font-family: $font-en;
     font-size: $fs-small;
     color: $color-gold;
+  }
+}
+
+/* ================= 浏览足迹（时间轴） ================= */
+.foot-stat {
+  display: flex;
+  align-items: center;
+  gap: clamp(18px, 3vw, 46px);
+  padding: clamp(14px, 1.6vw, 22px) clamp(16px, 2vw, 26px);
+  margin-bottom: clamp(20px, 2.4vw, 32px);
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-lg;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-md;
+}
+
+.foot-stat__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  b {
+    font-family: $font-en;
+    font-size: clamp(22px, 2.2vw, 34px);
+    line-height: 1;
+    color: $color-gold;
+  }
+
+  span {
+    font-size: $fs-small;
+    letter-spacing: 0.16em;
+    color: rgba(26, 26, 26, 0.5);
+  }
+}
+
+/* 「最近浏览」用宋体小字，与数字区分 */
+.foot-stat__cell b.foot-stat__small {
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(15px, 1.3vw, 20px);
+  color: $color-primary;
+}
+
+.foot-stat__line {
+  width: 1px;
+  height: 34px;
+  background: linear-gradient(
+    180deg,
+    rgba(201, 168, 106, 0) 0%,
+    $color-gold 50%,
+    rgba(201, 168, 106, 0) 100%
+  );
+}
+
+/* 时间轴本体 */
+.foot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(14px, 1.6vw, 22px);
+  min-height: 120px;
+  padding-left: 34px;
+
+  // 金色轴线
+  &::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 13px;
+    width: 1px;
+    background: linear-gradient(180deg, $color-gold 0%, rgba(201, 168, 106, 0.12) 100%);
+  }
+}
+
+.foot__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 轴上的圆点：与 13px 处的轴线对齐 */
+.foot__node {
+  position: absolute;
+  top: 50%;
+  left: -26px;
+  width: 10px;
+  height: 10px;
+  transform: translateY(-50%);
+  border: 1.5px solid $color-gold;
+  border-radius: 50%;
+  background: $color-paper;
+}
+
+/* 最近一条：实心 + 光晕 */
+.foot__item:first-child .foot__node {
+  background: $color-gold;
+  box-shadow: 0 0 0 4px rgba(201, 168, 106, 0.18);
+}
+
+.foot__card {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: clamp(12px, 1.4vw, 20px);
+  padding: clamp(10px, 1.2vw, 16px);
+  border: 1px solid rgba(201, 168, 106, 0.4);
+  border-radius: $radius-lg;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: $shadow-md;
+  text-align: left;
+  @include hover-lift(-4px, 1, $shadow-lg);
+
+  &:hover {
+    border-color: $color-gold;
+
+    .foot__arrow {
+      opacity: 1;
+      transform: translateX(3px);
+    }
+  }
+}
+
+.foot__cover {
+  width: clamp(72px, 7vw, 104px);
+  aspect-ratio: 4 / 3;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: $radius-md;
+  border: 1px solid rgba(201, 168, 106, 0.35);
+}
+
+.foot__info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.foot__name {
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(15px, 1.3vw, 19px);
+  letter-spacing: 0.08em;
+  color: $color-text-dark;
+  @include text-ellipsis(1);
+}
+
+.foot__sub {
+  font-size: $fs-small;
+  color: rgba(26, 26, 26, 0.55);
+
+  em {
+    font-style: normal;
+    color: $color-gold;
+  }
+}
+
+.foot__time {
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  color: $color-primary;
+}
+
+.foot__arrow {
+  margin-left: auto;
+  color: $color-gold;
+  opacity: 0.5;
+  transition:
+    opacity $duration-normal $ease-out-expo,
+    transform $duration-normal $ease-out-expo;
+}
+
+.foot__del {
+  flex-shrink: 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: rgba(26, 26, 26, 0.4);
+  opacity: 0.45;
+  transition:
+    opacity $duration-normal $ease-out-expo,
+    color $duration-fast $ease-out-expo;
+
+  &:hover {
+    color: $color-primary;
+    opacity: 1;
+  }
+}
+
+.foot__item:hover .foot__del {
+  opacity: 1;
+}
+
+/* ================= 旅行笔记（便签墙） ================= */
+.note-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: clamp(18px, 2.2vw, 30px);
+}
+
+.note-bar__stat {
+  font-size: $fs-small;
+  letter-spacing: 0.1em;
+  color: rgba(26, 26, 26, 0.6);
+
+  b {
+    margin: 0 2px;
+    font-family: $font-en;
+    font-size: 1.4em;
+    color: $color-primary;
+  }
+}
+
+.note-bar__search {
+  position: relative;
+  min-width: 220px;
+  padding: 6px 2px;
+
+  input {
+    width: 100%;
+    padding: 5px 0;
+    border: none;
+    background: transparent;
+    font-family: $font-body;
+    font-size: $fs-small;
+    color: $color-text-dark;
+
+    &::placeholder {
+      color: rgba(26, 26, 26, 0.35);
+    }
+  }
+}
+
+.note-bar__line {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 1px;
+  background: rgba(140, 31, 40, 0.25);
+  transition: background-color $duration-normal $ease-out-expo;
+}
+
+.note-bar__search:focus-within .note-bar__line {
+  background: $color-gold;
+  box-shadow: 0 1px 8px rgba(201, 168, 106, 0.6);
+}
+
+.notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: clamp(16px, 2vw, 26px);
+  min-height: 120px;
+}
+
+/* 便签本体：宣纸底 + 轻微错落（hover 时摆正） */
+.note {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: clamp(18px, 2vw, 26px) clamp(16px, 1.8vw, 24px);
+  border: 1px solid rgba(201, 168, 106, 0.4);
+  border-radius: $radius-md;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(232, 227, 216, 0.86));
+  box-shadow: $shadow-md;
+  cursor: pointer;
+  transform: rotate(-0.35deg);
+  transition:
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo;
+
+  &--r1 {
+    transform: rotate(0.45deg);
+  }
+
+  &--r2 {
+    transform: rotate(-0.6deg);
+  }
+
+  &:hover {
+    transform: rotate(0deg) translateY(-6px);
+    box-shadow: $shadow-lg;
+    border-color: $color-gold;
+
+    .note__del {
+      opacity: 1;
+    }
+  }
+}
+
+/* 金色图钉 */
+.note__pin {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e4cf9e, $color-gold);
+  box-shadow: 0 2px 6px rgba(140, 31, 40, 0.35);
+}
+
+.note__title {
+  margin-top: 6px;
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(15px, 1.3vw, 19px);
+  letter-spacing: 0.08em;
+  color: $color-ink;
+  @include text-ellipsis(1);
+}
+
+.note__content {
+  flex: 1;
+  font-family: $font-body;
+  font-size: $fs-small;
+  line-height: 1.9;
+  color: rgba(26, 26, 26, 0.72);
+  white-space: pre-wrap;
+  @include text-ellipsis(5);
+}
+
+.note__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.note__tag {
+  padding: 2px 9px;
+  border: 1px solid rgba(201, 168, 106, 0.5);
+  border-radius: $radius-sm;
+  font-size: 12px;
+  color: $color-bamboo;
+}
+
+.note__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(140, 31, 40, 0.15);
+  font-size: 12px;
+}
+
+.note__linked {
+  color: $color-primary;
+  @include text-ellipsis(1);
+}
+
+.note__date {
+  flex-shrink: 0;
+  color: rgba(26, 26, 26, 0.45);
+}
+
+.note__del {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 12px;
+  color: rgba(26, 26, 26, 0.45);
+  opacity: 0;
+  transition:
+    opacity $duration-normal $ease-out-expo,
+    color $duration-fast $ease-out-expo;
+
+  &:hover {
+    color: $color-primary;
+  }
+}
+
+/* 笔记表单 */
+.note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  &__row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    :deep(.el-select) {
+      flex: 1 1 55%;
+    }
+
+    :deep(.el-input) {
+      flex: 1 1 30%;
+    }
   }
 }
 

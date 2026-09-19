@@ -351,3 +351,43 @@ INSERT IGNORE INTO `scenic_image` (`id`, `scenic_id`, `image_url`, `sort_order`)
 (55, 19, 'https://picsum.photos/seed/shuyun-s19-a/1200/800', 0),
 (56, 19, 'https://picsum.photos/seed/shuyun-s19-b/1200/800', 1),
 (57, 19, 'https://picsum.photos/seed/shuyun-s19-c/1200/800', 2);
+
+-- ============================================================================
+-- 10. user_view_history 浏览足迹表
+--     每个用户对同一对象只保留一条，重复浏览时更新时间（便于按最近浏览排序）
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `user_view_history` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`     BIGINT       NOT NULL                COMMENT '用户ID',
+    `target_type` VARCHAR(20)  NOT NULL                COMMENT '对象类型：SCENIC/CULTURE',
+    `target_id`   BIGINT       NOT NULL                COMMENT '对象ID',
+    `target_name` VARCHAR(100)          DEFAULT NULL   COMMENT '对象名称（冗余）',
+    `cover_image` VARCHAR(255)          DEFAULT NULL   COMMENT '封面图（冗余）',
+    `sub_title`   VARCHAR(100)          DEFAULT NULL   COMMENT '副标题（市州 / 分类，冗余）',
+    `view_time`   DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '最近浏览时间',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_target` (`user_id`, `target_type`, `target_id`),
+    KEY `idx_user_time` (`user_id`, `view_time`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '浏览足迹表';
+
+-- ============================================================================
+-- 11. user_note 旅行笔记表
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `user_note` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`     BIGINT       NOT NULL                COMMENT '用户ID',
+    `title`       VARCHAR(120)          DEFAULT NULL   COMMENT '标题',
+    `content`     TEXT                                 COMMENT '正文',
+    `target_type` VARCHAR(20)           DEFAULT NULL   COMMENT '关联对象类型',
+    `target_id`   BIGINT                DEFAULT NULL   COMMENT '关联对象ID（可空）',
+    `target_name` VARCHAR(100)          DEFAULT NULL   COMMENT '关联对象名称（可自由填写）',
+    `tags`        VARCHAR(255)          DEFAULT NULL   COMMENT '标签（逗号分隔）',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '旅行笔记表';

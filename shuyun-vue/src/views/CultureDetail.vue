@@ -8,6 +8,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 
 interface CultureItem {
   id: number
@@ -22,6 +23,7 @@ interface CultureItem {
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 
 const loading = ref(true)
 const notFound = ref(false)
@@ -87,12 +89,29 @@ async function loadDetail(id: number) {
     const res = await request.get(`/culture/${id}`, { silent: true })
     culture.value = res.data ?? null
     notFound.value = !culture.value
+    if (culture.value) {
+      recordHistory()
+    }
   } catch {
     culture.value = null
     notFound.value = true
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * 记录浏览足迹（未登录不记录；失败静默）
+ */
+function recordHistory() {
+  if (!userStore.isLogin || !culture.value) {
+    return
+  }
+  request
+    .post('/user/history', { targetType: 'CULTURE', targetId: culture.value.id }, { silent: true })
+    .catch(() => {
+      // 足迹记录失败不影响浏览
+    })
 }
 
 function goDetail(id: number) {

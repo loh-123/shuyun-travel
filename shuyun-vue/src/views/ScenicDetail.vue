@@ -148,6 +148,7 @@ async function loadDetail() {
     notFound.value = !detail.value
     if (detail.value) {
       await Promise.all([checkCollected(), loadWeather(detail.value.cityName || '成都')])
+      recordHistory()
     }
   } catch {
     detail.value = null
@@ -155,6 +156,20 @@ async function loadDetail() {
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * 记录浏览足迹（未登录不记录；失败静默，不影响页面）
+ */
+function recordHistory() {
+  if (!userStore.isLogin || !detail.value) {
+    return
+  }
+  request
+    .post('/user/history', { targetType: 'SCENIC', targetId: detail.value.id }, { silent: true })
+    .catch(() => {
+      // 足迹记录失败不影响浏览
+    })
 }
 
 /** 查询是否已收藏 */
