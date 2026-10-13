@@ -56,10 +56,105 @@
 /// @param $alpha 金色透明度
 /// @param $radius 圆角，0 表示不设置
 @mixin gold-border($alpha: 0.42, $radius: 0) {
-  border: 1px solid rgba(201, 168, 106, $alpha);
+  border: 1px solid rgba(212, 179, 116, $alpha);
 
   @if $radius != 0 {
     border-radius: $radius;
+  }
+}
+
+/// 高级金黄绸缎底（斜向金调渐变 + 缎面斜纹高光 + 左上柔光）
+/// 用于加载态等需要「丝绸质感」金底的地方
+@mixin silk-gold-bg {
+  background-color: #c9a63f;
+  background-image:
+    repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.16) 0 2px, rgba(255, 255, 255, 0) 2px 10px),
+    radial-gradient(120% 95% at 24% 12%, rgba(255, 247, 214, 0.72) 0%, rgba(255, 247, 214, 0) 58%),
+    linear-gradient(135deg, #e9cf7e 0%, #d4ad4a 30%, #bd9331 58%, #a87f22 82%, #dcc06a 100%);
+}
+
+// ------------------------------------------------------------
+// 详情页卡片皮肤
+// ------------------------------------------------------------
+
+/// 金黄直角卡片（景点 / 美食详情页信息卡统一皮肤）
+/// 固定金黄底 + 深棕文字（覆盖主题令牌，日夜主题下均清晰），直角、随栅格等高等宽
+@mixin sy-card-gold($pad: clamp(18px, 2vw, 28px)) {
+  --sy-surface-rgb: 246, 230, 186;
+  --sy-ink: #4a3410;
+  --sy-text-dark: #4a3410;
+  --sy-text-rgb: 74, 52, 16;
+  --sy-accent: #7a1a22;
+
+  position: relative;
+  padding: $pad;
+  border: 1px solid #c9a35c;
+  border-radius: 0; // 直角
+  background: linear-gradient(158deg, #f9efd5 0%, #f0dea9 56%, #e5ca8c 100%);
+  box-shadow: 0 10px 24px rgba(163, 122, 42, 0.2);
+  transition:
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo;
+
+  &:hover {
+    transform: translateY(-3px);
+    border-color: $color-gold;
+    box-shadow: 0 18px 36px rgba(163, 122, 42, 0.32);
+  }
+}
+
+/// 红色窗花卡片（文化 / 非遗详情页信息卡统一皮肤）
+/// 蜀锦红底 + 窗棂剪纸纹理 + 中式切角窗轮廓 + 内层金色窗框
+@mixin sy-card-window($pad: clamp(18px, 2vw, 28px)) {
+  --sy-surface-rgb: 92, 20, 27;
+  --sy-ink: #fbeede;
+  --sy-text-dark: #f7eee0;
+  --sy-text-rgb: 247, 238, 224;
+  --sy-accent: #f2d79b;
+
+  position: relative;
+  padding: $pad;
+  border: none;
+  border-radius: 0;
+  background:
+    repeating-linear-gradient(45deg, rgba(245, 241, 232, 0.06) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(-45deg, rgba(245, 241, 232, 0.06) 0 1px, transparent 1px 15px),
+    linear-gradient(150deg, #8e2230 0%, #7a1a22 55%, #5f1218 100%);
+  // 中式切角窗轮廓（直角矩形切去四角）
+  clip-path: polygon(
+    16px 0,
+    calc(100% - 16px) 0,
+    100% 16px,
+    100% calc(100% - 16px),
+    calc(100% - 16px) 100%,
+    16px 100%,
+    0 calc(100% - 16px),
+    0 16px
+  );
+  transition: transform $duration-normal $ease-out-expo;
+
+  // 内层金色窗框（呼应窗棂）
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 7px;
+    border: 1px solid rgba(242, 215, 155, 0.5);
+    clip-path: polygon(
+      10px 0,
+      calc(100% - 10px) 0,
+      100% 10px,
+      100% calc(100% - 10px),
+      calc(100% - 10px) 100%,
+      10px 100%,
+      0 calc(100% - 10px),
+      0 10px
+    );
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-3px);
   }
 }
 
@@ -78,9 +173,15 @@
     border-color $duration-normal $ease-out-expo;
   will-change: transform;
 
+  // 默认干净（描边透明），hover 才显现金色描边
+  &:not(:hover) {
+    border-color: transparent;
+  }
+
   &:hover {
     transform: translateY($y) scale($scale);
     box-shadow: $shadow;
+    border-color: $color-gold;
   }
 }
 

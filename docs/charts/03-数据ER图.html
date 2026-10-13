@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1600, initial-scale=1" />
+  <title>第4章 · 数据 E-R 图</title>
+  <style>
+    :root{
+      --red:#8C1F28; --gold:#D4B374; --ink:#1A1A1A; --gray:#6B7280; --paper:#F5F1E8;
+      --cn:"Source Han Serif SC","Noto Serif SC","LXGW WenKai","Songti SC",STSong,"Microsoft YaHei",serif;
+      --mono:"JetBrains Mono","Inter",monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{width:1600px;height:1000px;overflow:hidden;}
+    body{background:#ffffff;color:var(--ink);font-family:var(--cn);-webkit-font-smoothing:antialiased;}
+    .canvas{position:relative;width:1600px;height:1000px;}
+
+    /* ---------- 标题 ---------- */
+    .head{position:absolute;top:40px;left:0;right:0;text-align:center;}
+    .kicker{font-family:var(--mono);font-size:15px;letter-spacing:.5em;padding-left:.5em;color:var(--gold);margin-bottom:14px;}
+    .title{font-size:48px;font-weight:700;letter-spacing:.16em;padding-left:.16em;}
+    .rule{width:130px;height:3px;margin:18px auto 0;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold));}
+
+    /* ---------- 连线层 ---------- */
+    .links{position:absolute;inset:0;z-index:1;pointer-events:none;}
+    .links .lbl{font-family:var(--mono);font-size:14px;font-weight:700;fill:var(--red);}
+    .links .lbl2{font-family:var(--mono);font-size:12px;fill:var(--gray);}
+
+    /* ---------- 表卡片 ---------- */
+    .tcard{
+      position:absolute;z-index:2;height:200px;background:#fff;overflow:hidden;
+      border:1.5px solid rgba(212,179,116,.85);border-radius:12px;
+      box-shadow:0 20px 44px -30px rgba(26,26,26,.6);
+    }
+    .tcard .th{
+      display:flex;align-items:baseline;justify-content:space-between;
+      padding:12px 18px;background:var(--paper);
+      border-bottom:1.5px solid rgba(212,179,116,.85);
+    }
+    .tcard .th .nm{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--red);letter-spacing:.02em;}
+    .tcard .th .zh{font-size:13px;color:var(--gray);}
+    .tcard .f{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:5px 18px;font-family:var(--mono);font-size:14px;line-height:1.4;color:var(--ink);
+    }
+    .tcard .f .nm.pk{border-bottom:2px solid var(--gold);padding-bottom:1px;}
+    .tcard .f .nm.fk{color:var(--red);font-weight:700;}
+    .tcard .tg{font-family:var(--mono);font-size:11px;letter-spacing:.1em;padding:1px 7px;border-radius:999px;}
+    .tcard .tg.pk{color:#9A7B32;border:1px solid var(--gold);}
+    .tcard .tg.fk{color:var(--red);border:1px solid var(--red);}
+
+    /* ---------- 图例 ---------- */
+    .legend{
+      position:absolute;left:90px;top:800px;z-index:2;
+      display:flex;align-items:center;gap:28px;
+      font-size:14px;color:var(--gray);font-family:var(--mono);letter-spacing:.02em;
+    }
+    .legend i{display:inline-block;vertical-align:middle;margin-right:8px;}
+    .legend .u{width:22px;height:0;border-bottom:2px solid var(--gold);}
+    .legend .r{width:14px;height:14px;border:1.5px solid var(--red);border-radius:4px;}
+    .legend .ln{width:26px;height:0;border-top:2px solid var(--gold);position:relative;top:-3px;}
+    .legend .ln.dash{border-top-style:dashed;}
+    .legend .mk{font-family:var(--cn);font-size:15px;}
+  </style>
+</head>
+<body>
+  <div class="canvas">
+
+    <header class="head">
+      <div class="kicker">CHAPTER 04 · DATA MODEL</div>
+      <h1 class="title">数据 E-R 图</h1>
+      <div class="rule"></div>
+    </header>
+
+    <svg class="links" width="1600" height="1000" viewBox="0 0 1600 1000">
+      <defs>
+        <marker id="ah" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L9,4.5 L0,9 z" fill="#D4B374" />
+        </marker>
+      </defs>
+
+      <!-- city 1 : N scenic_spot -->
+      <line x1="380" y1="340" x2="462" y2="340" stroke="#D4B374" stroke-width="2" marker-end="url(#ah)" />
+      <text class="lbl" x="421" y="328" text-anchor="middle">1 : N</text>
+
+      <!-- scenic_spot 1 : N scenic_image -->
+      <line x1="790" y1="340" x2="872" y2="340" stroke="#D4B374" stroke-width="2" marker-end="url(#ah)" />
+      <text class="lbl" x="831" y="328" text-anchor="middle">1 : N</text>
+
+      <!-- culture 1 : N culture_person -->
+      <line x1="380" y1="640" x2="462" y2="640" stroke="#D4B374" stroke-width="2" marker-end="url(#ah)" />
+      <text class="lbl" x="421" y="628" text-anchor="middle">1 : N</text>
+
+      <!-- culture N : M scenic_spot（虚线，逻辑关联） -->
+      <path d="M235,540 L235,480 L630,480 L630,448" fill="none"
+            stroke="#8C1F28" stroke-width="2" stroke-dasharray="7 6" marker-end="url(#ah)" />
+      <text class="lbl" x="432" y="470" text-anchor="middle">N : M</text>
+      <text class="lbl2" x="432" y="492" text-anchor="middle">culture_scenic（逻辑关联，可省略中间表）</text>
+    </svg>
+
+    <!-- 第一排 -->
+    <div class="tcard" style="left:90px;top:240px;width:290px;">
+      <div class="th"><span class="nm">city</span><span class="zh">市州</span></div>
+      <div class="f"><span class="nm pk">id</span><span class="tg pk">PK</span></div>
+      <div class="f"><span class="nm">name</span></div>
+      <div class="f"><span class="nm">code</span></div>
+    </div>
+
+    <div class="tcard" style="left:470px;top:240px;width:320px;">
+      <div class="th"><span class="nm">scenic_spot</span><span class="zh">景点</span></div>
+      <div class="f"><span class="nm pk">id</span><span class="tg pk">PK</span></div>
+      <div class="f"><span class="nm">name</span></div>
+      <div class="f"><span class="nm fk">city_id</span><span class="tg fk">FK</span></div>
+      <div class="f"><span class="nm">type</span></div>
+      <div class="f"><span class="nm">level</span></div>
+    </div>
+
+    <div class="tcard" style="left:880px;top:240px;width:320px;">
+      <div class="th"><span class="nm">scenic_image</span><span class="zh">景点图片</span></div>
+      <div class="f"><span class="nm pk">id</span><span class="tg pk">PK</span></div>
+      <div class="f"><span class="nm fk">scenic_id</span><span class="tg fk">FK</span></div>
+      <div class="f"><span class="nm">image_url</span></div>
+    </div>
+
+    <!-- 第二排 -->
+    <div class="tcard" style="left:90px;top:540px;width:290px;">
+      <div class="th"><span class="nm">culture</span><span class="zh">文化</span></div>
+      <div class="f"><span class="nm pk">id</span><span class="tg pk">PK</span></div>
+      <div class="f"><span class="nm">name</span></div>
+      <div class="f"><span class="nm">category</span></div>
+      <div class="f"><span class="nm">cover_image</span></div>
+    </div>
+
+    <div class="tcard" style="left:470px;top:540px;width:320px;">
+      <div class="th"><span class="nm">culture_person</span><span class="zh">传承人</span></div>
+      <div class="f"><span class="nm pk">id</span><span class="tg pk">PK</span></div>
+      <div class="f"><span class="nm">name</span></div>
+      <div class="f"><span class="nm fk">culture_id</span><span class="tg fk">FK</span></div>
+      <div class="f"><span class="nm">avatar</span></div>
+    </div>
+
+    <div class="tcard" style="left:900px;top:540px;width:290px;">
+      <div class="th"><span class="nm">heritage</span><span class="zh">非遗</span></div>
+      <div class="f"><span class="nm pk">id</span><span class="tg pk">PK</span></div>
+      <div class="f"><span class="nm">name</span></div>
+      <div class="f"><span class="nm">category</span></div>
+      <div class="f"><span class="nm">level</span></div>
+    </div>
+
+    <!-- 图例 -->
+    <div class="legend">
+      <span><i class="u"></i><span class="mk">PK 主键（金色下划线）</span></span>
+      <span><i class="r"></i><span class="mk">FK 外键（蜀锦红）</span></span>
+      <span><i class="ln"></i><span class="mk">1 : N 关联</span></span>
+      <span><i class="ln dash"></i><span class="mk">N : M 逻辑关联</span></span>
+    </div>
+
+  </div>
+</body>
+</html>

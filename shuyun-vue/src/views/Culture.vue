@@ -12,9 +12,9 @@ import { useRouter } from 'vue-router'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
-import request from '@/api/request'
-import { getLenis } from '@/composables/useLenis'
+import { listCulture, listCultureByCategory, type CultureVO } from '@/api/culture'
 import GoldButton from '@/components/common/GoldButton.vue'
+import StateBlock from '@/components/common/StateBlock.vue'
 import CultureIcon from '@/components/common/CultureIcon.vue'
 import { t } from '@/i18n'
 
@@ -23,15 +23,7 @@ gsap.registerPlugin(ScrollTrigger)
 /* ------------------------------------------------------------
  * 类型与常量
  * ---------------------------------------------------------- */
-interface CultureItem {
-  id: number
-  name: string
-  category?: string
-  coverImage?: string
-  summary?: string
-  content?: string
-  tags?: string
-}
+// 类型统一来自 @/api/culture（CultureVO）
 
 /** 换成本地大图：/images/culture-hero.webp（川剧 / 蜀绣类实景） */
 const HERO_BG =
@@ -58,9 +50,31 @@ const rootEl = ref<HTMLElement | null>(null)
 const cardEls = ref<HTMLElement[]>([])
 const timelineEl = ref<HTMLElement | null>(null)
 
-const list = ref<CultureItem[]>([])
+const all = ref<CultureVO[]>([])
+const list = ref<CultureVO[]>([])
+const categories = ref<string[]>([])
+const activeCategory = ref('')
 const loading = ref(true)
-const activeId = ref<number | null>(null)
+/** 接口是否加载失败 */
+const loadFailed = ref(false)
+const listEl = ref<HTMLElement | null>(null)
+
+/** 图片兜底占位图（内联 SVG） */
+const IMG_FALLBACK =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450"><rect width="100%" height="100%" fill="#F0EBE0"/><text x="50%" y="50%" fill="#D4B374" font-size="60" font-family="serif" text-anchor="middle" dominant-baseline="middle">蜀</text></svg>',
+  )
+
+/** 图片加载失败：换成占位图（每张只处理一次） */
+function onImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  if (!img || img.dataset.fallback === '1') {
+    return
+  }
+  img.dataset.fallback = '1'
+  img.src = IMG_FALLBACK
+}
 
 /** 收集卡片 DOM，供滚动定位与入场动画使用 */
 function registerCard(el: unknown, index: number) {
@@ -69,10 +83,10 @@ function registerCard(el: unknown, index: number) {
   }
 }
 
-/** 卡片简介：正文两段拼接（约 150 字，由 CSS 限 3 行） */
-function introOf(item: CultureItem) {
-  const text = (item.content || item.summary || '').replace(/\n/g, '')
-  return text || item.summary || ''
+/** 卡片简介：取 summary，截断 150 字 */
+function introOf(item: CultureVO) {
+  const text = (item.summary || '').replace(/\n/g, '')
+  return text.length > 150 ? `${text.slice(0, 150)}…` : text
 }
 
 /** 标签拆分 */
@@ -86,34 +100,57 @@ function splitTags(tags?: string) {
 /* ------------------------------------------------------------
  * 数据
  * ---------------------------------------------------------- */
-async function loadList() {
+async function loadAll() {
   loading.value = true
+  loadFailed.value = false
   try {
-    const res = await request.get('/culture/list', { silent: true })
-    list.value = Array.isArray(res.data) ? res.data : []
-    activeId.value = list.value[0]?.id ?? null
+    const data = await listCulture()
+    const arr = Array.isArray(data) ? data : []
+    all.value = arr
+    list.value = arr
+    // 从数据里提取去重分类
+    categories.value = Array.from(new Set(arr.map((c) => c.category).filter(Boolean))) as string[]
   } catch {
+    loadFailed.value = true
+    all.value = []
     list.value = []
   } finally {
     loading.value = false
   }
 }
 
-/** 点击导航胶囊：滚动到对应卡片（让开固定导航 + 吸顶胶囊条） */
-function gotoCulture(id: number) {
-  activeId.value = id
-  const index = list.value.findIndex((c) => c.id === id)
-  const el = cardEls.value[index]
-  if (!el) {
+/** 切换分类：'' = 全部（全量已缓存；具体分类走接口） */
+async function selectCategory(cat: string) {
+  if (activeCategory.value === cat) {
     return
   }
-  const lenis = getLenis()
-  if (lenis) {
-    lenis.scrollTo(el, { offset: -150, duration: 1.1 })
-  } else {
-    window.scrollTo({ top: el.offsetTop - 150, behavior: 'smooth' })
+  activeCategory.value = cat
+  loading.value = true
+  loadFailed.value = false
+  try {
+    if (!cat) {
+      list.value = all.value
+    } else {
+      const data = await listCultureByCategory(cat)
+      list.value = Array.isArray(data) ? data : []
+    }
+  } catch {
+    loadFailed.value = true
+    list.value = []
+  } finally {
+    loading.value = false
+  }
+  await nextTick()
+  if (listEl.value) {
+    gsap.fromTo(
+      listEl.value,
+      { opacity: 0, y: 12 },
+      { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' },
+    )
   }
 }
+
+// 分类切换见 selectCategory（原「按名称滚动定位」的导航已改为分类筛选）
 
 function goDetail(id: number) {
   router.push(`/culture/${id}`)
@@ -125,7 +162,7 @@ function goDetail(id: number) {
 let ctx: gsap.Context | null = null
 
 onMounted(async () => {
-  await loadList()
+  await loadAll()
   await nextTick()
 
   ctx = gsap.context(() => {
@@ -225,20 +262,38 @@ onUnmounted(() => {
     <nav class="cul-nav" :aria-label="t('culture.navAria')">
       <div class="sy-container cul-nav__inner">
         <button
-          v-for="item in list"
-          :key="item.id"
+          type="button"
+          class="cul-nav__person"
+          @click="router.push('/person')"
+        >
+          全部传承人
+        </button>
+        <button
           type="button"
           class="cul-nav__pill"
-          :class="{ 'is-active': item.id === activeId }"
-          @click="gotoCulture(item.id)"
+          :class="{ 'is-active': activeCategory === '' }"
+          @click="selectCategory('')"
         >
-          {{ item.name }}
+          全部
+        </button>
+        <button
+          v-for="cat in categories"
+          :key="cat"
+          type="button"
+          class="cul-nav__pill"
+          :class="{ 'is-active': activeCategory === cat }"
+          @click="selectCategory(cat)"
+        >
+          {{ cat }}
         </button>
       </div>
     </nav>
 
     <!-- ================= 3. 文化卡片墙 ================= -->
-    <div v-loading="loading" class="sy-container cul-list">
+    <!-- 加载中 -->
+    <StateBlock v-if="loading" state="loading" />
+
+    <div v-if="!loading" ref="listEl" class="sy-container cul-list">
       <article
         v-for="(item, i) in list"
         :key="item.id"
@@ -248,7 +303,7 @@ onUnmounted(() => {
       >
         <!-- 大图 -->
         <div class="cul-card__media">
-          <img class="cul-card__img" :src="item.coverImage" alt="" loading="lazy" decoding="async" />
+          <img class="cul-card__img" :src="item.coverImage" alt="" loading="lazy" decoding="async" @error="onImgError" />
           <span class="cul-card__index">{{ String(i + 1).padStart(2, '0') }}</span>
         </div>
 
@@ -276,6 +331,9 @@ onUnmounted(() => {
           </GoldButton>
         </div>
       </article>
+
+      <StateBlock v-if="!loading && loadFailed" state="error" :retry="loadAll" />
+      <StateBlock v-else-if="!loading && !list.length" state="empty" empty-text="暂无内容" />
     </div>
 
     <!-- ================= 4. 文化时间轴 ================= -->
@@ -310,7 +368,7 @@ onUnmounted(() => {
   position: relative;
   display: flex;
   align-items: flex-end;
-  min-height: 60vh;
+  min-height: $hero-list-height;
   overflow: hidden;
   isolation: isolate;
 }
@@ -364,7 +422,7 @@ onUnmounted(() => {
   margin-top: clamp(14px, 2vh, 26px);
   font-family: $font-title;
   font-weight: 900;
-  font-size: $fs-hero;
+  font-size: $fs-hero-xl;
   line-height: 1;
   letter-spacing: -0.02em;
   color: $color-text-light;
@@ -393,16 +451,22 @@ onUnmounted(() => {
  * ========================================================== */
 .cul-nav {
   position: sticky;
-  top: 68px;
+  top: $nav-height;
   z-index: $z-header - 1;
-  border-bottom: 1px solid rgba(201, 168, 106, 0.28);
-  @include glass(rgba(232, 227, 216, 0.82), 18px);
+  border-bottom: 1px solid rgba(212, 179, 116, 0.28);
+  @include glass(rgba(var(--sy-paper-rgb), 0.82), 18px);
 }
 
 .cul-nav__inner {
-  display: flex;
-  gap: 10px;
-  padding-block: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-block: 16px;
+  padding: 6px;
+  border: 1px solid rgba(212, 179, 116, 0.35);
+  border-radius: 16px;
+  background: rgba(var(--sy-surface-rgb), 0.88);
+  box-shadow: 0 10px 30px rgba(14, 42, 71, 0.06);
   overflow-x: auto;
   scrollbar-width: none;
 
@@ -413,30 +477,30 @@ onUnmounted(() => {
 
 .cul-nav__pill {
   flex-shrink: 0;
-  padding: 9px 20px;
-  border: 1px solid rgba(140, 31, 40, 0.22);
-  border-radius: $radius-pill;
+  display: inline-flex;
+  align-items: center;
+  height: 54px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 11px;
   background: transparent;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.1em;
-  color: rgba(26, 26, 26, 0.78);
+  font-size: 24px;
+  letter-spacing: 0.04em;
+  color: rgba(var(--sy-text-rgb), 0.72);
   transition:
     background-color $duration-normal $ease-out-expo,
-    border-color $duration-normal $ease-out-expo,
-    color $duration-normal $ease-out-expo,
-    transform $duration-normal $ease-out-expo;
+    color $duration-normal $ease-out-expo;
 
   &:hover {
-    border-color: $color-gold;
-    color: $color-primary;
-    transform: translateY(-2px);
+    background: rgba(122, 26, 34, 0.07);
+    color: var(--sy-accent);
   }
 
   &.is-active {
-    border-color: $color-gold;
-    background: $color-gold;
+    background: linear-gradient(120deg, $color-gold, #c39d52);
     color: $color-ink;
+    box-shadow: 0 8px 18px rgba(212, 179, 116, 0.35);
   }
 }
 
@@ -472,7 +536,7 @@ onUnmounted(() => {
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-lg;
   box-shadow: $shadow-md;
   will-change: transform;
@@ -515,32 +579,32 @@ onUnmounted(() => {
 }
 
 .cul-card__icon {
-  width: 30px;
+  width: 40px;
   color: $color-gold;
 }
 
 .cul-card__category {
   font-family: $font-en-body;
-  font-size: $fs-small;
-  letter-spacing: 0.24em;
+  font-size: 24px;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: $color-gold;
 }
 
 .cul-card__name {
   font-family: $font-title;
-  font-weight: 900;
-  font-size: $fs-h2;
+  font-weight: 700;
+  font-size: clamp(40px, 3.4vw, 56px);
   line-height: 1.1;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: $color-ink;
 }
 
 .cul-card__intro {
   font-family: $font-body;
-  font-size: clamp(15px, 1.3vw, 19px);
-  line-height: 1.9;
-  color: rgba(26, 26, 26, 0.72);
+  font-size: clamp(20px, 1.6vw, 24px);
+  line-height: 1.8;
+  color: rgba(var(--sy-text-rgb), 0.72);
   @include text-ellipsis(3);
 }
 
@@ -551,16 +615,17 @@ onUnmounted(() => {
 }
 
 .cul-card__tag {
-  padding: 3px 12px;
-  border: 1px solid rgba(201, 168, 106, 0.5);
+  padding: 6px 18px;
+  border: 1px solid rgba(212, 179, 116, 0.5);
   border-radius: $radius-sm;
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 18px;
+  letter-spacing: 0.06em;
   color: $color-bamboo;
 }
 
 .cul-card__more {
   margin-top: 6px;
+  font-size: 20px;
 }
 
 /* ============================================================
@@ -569,7 +634,7 @@ onUnmounted(() => {
 .cul-time {
   padding-block: clamp(56px, 8vw, 130px);
   background:
-    radial-gradient(120% 130% at 15% 0%, rgba(201, 168, 106, 0.16) 0%, rgba(232, 227, 216, 0) 60%),
+    radial-gradient(120% 130% at 15% 0%, rgba(212, 179, 116, 0.16) 0%, rgba(var(--sy-paper-rgb), 0) 60%),
     $color-paper;
 }
 
@@ -593,11 +658,11 @@ onUnmounted(() => {
 }
 
 .cul-time__line {
-  background: rgba(140, 31, 40, 0.15);
+  background: rgba(122, 26, 34, 0.15);
 }
 
 .cul-time__line-fill {
-  background: linear-gradient(90deg, $color-gold, rgba(201, 168, 106, 0.35));
+  background: linear-gradient(90deg, $color-gold, rgba(212, 179, 116, 0.35));
 }
 
 .cul-time__item {
@@ -613,7 +678,7 @@ onUnmounted(() => {
   height: 11px;
   border-radius: 50%;
   background: $color-gold;
-  box-shadow: 0 0 0 4px rgba(201, 168, 106, 0.18);
+  box-shadow: 0 0 0 4px rgba(212, 179, 116, 0.18);
 }
 
 .cul-time__era {
@@ -621,7 +686,7 @@ onUnmounted(() => {
   font-weight: 900;
   font-size: clamp(16px, 1.5vw, 22px);
   letter-spacing: 0.12em;
-  color: $color-primary;
+  color: var(--sy-accent);
 }
 
 .cul-time__year {
@@ -636,7 +701,7 @@ onUnmounted(() => {
   font-family: $font-body;
   font-size: $fs-small;
   line-height: 1.85;
-  color: rgba(26, 26, 26, 0.68);
+  color: rgba(var(--sy-text-rgb), 0.68);
 }
 
 /* ============================================================
@@ -672,6 +737,38 @@ onUnmounted(() => {
   .cul-time__track {
     grid-template-columns: repeat(5, minmax(210px, 1fr));
     overflow-x: auto;
+  }
+}
+
+/* 空状态 */
+.cul-empty {
+  padding-block: clamp(48px, 8vw, 110px);
+  font-family: $font-title;
+  font-size: clamp(16px, 1.4vw, 22px);
+  letter-spacing: 0.14em;
+  text-align: center;
+  color: rgba(var(--sy-text-rgb), 0.6);
+}
+/* 全部传承人入口按钮（分类导航左侧） */
+.cul-nav__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  padding: 8px 18px;
+  border: 1px solid $color-gold;
+  border-radius: $radius-pill;
+  background: rgba(212, 179, 116, 0.1);
+  font-family: $font-body;
+  font-size: $fs-small;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--sy-accent);
+  cursor: pointer;
+  transition: background-color $duration-normal $ease-out-expo;
+
+  &:hover {
+    background: rgba(212, 179, 116, 0.22);
   }
 }
 </style>

@@ -120,7 +120,7 @@ function goAssistant() {
   flex-direction: column;
   gap: 14px;
   padding: clamp(18px, 2vw, 28px);
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-lg;
   background: rgba(20, 26, 34, 0.42);
   backdrop-filter: blur(14px);
@@ -142,7 +142,7 @@ function goAssistant() {
   height: 8px;
   border-radius: 50%;
   background: $color-gold;
-  box-shadow: 0 0 12px rgba(201, 168, 106, 0.9);
+  box-shadow: 0 0 12px rgba(212, 179, 116, 0.9);
 }
 
 .ai__preview-body {
@@ -161,15 +161,15 @@ function goAssistant() {
 
   &--user {
     align-self: flex-end;
-    background: rgba(140, 31, 40, 0.85);
+    background: rgba(122, 26, 34, 0.85);
     color: $color-text-light;
   }
 
   &--ai {
     align-self: flex-start;
-    background: rgba(201, 168, 106, 0.16);
+    background: rgba(212, 179, 116, 0.16);
     color: $color-text-light;
-    border: 1px solid rgba(201, 168, 106, 0.32);
+    border: 1px solid rgba(212, 179, 116, 0.32);
   }
 }
 

@@ -1,30 +1,29 @@
 <script setup lang="ts">
 /**
- * 首屏 Hero
- * - 主标题「蜀韵智游」使用真实字形轮廓（SVG path）错落排版：
- *   金色描边 + 逐字「书写」动画（stroke-dashoffset）+ 鼠标视差
- * - 副标题逐字浮现；右侧竖排诗句；右下角印章；金色粒子；底部呼吸箭头
- * - 背景由 Home.vue 的统一 fixed 舞台负责（便于整屏交叉淡入）
+ * 首屏 · 蜀韵管家（智能体入口页）
+ * - 一句话自我介绍 + 可用对话输入框 + 3 个示例问题
+ * - 输入框：回车 / 点击右侧金色按钮 → 跳转 /assistant 并带入问题（自动填入输入框）
+ * - 示例问题：点击 → 跳转 /assistant 并自动提交
+ * - 背景由 Home.vue 的统一 fixed 舞台提供（dark 色调），此处只负责内容层
  */
-import { onMounted, onUnmounted, ref, watch } from 'vue'
-import gsap from 'gsap'
-import { TITLE_GLYPHS } from './title-paths'
+import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 const props = defineProps<{ active?: boolean }>()
 
-const rootEl = ref<HTMLElement | null>(null)
-const titleEl = ref<HTMLElement | null>(null)
-const subtitleEl = ref<HTMLElement | null>(null)
-const poemEl = ref<HTMLElement | null>(null)
-const sealEl = ref<HTMLElement | null>(null)
-const lineEl = ref<HTMLElement | null>(null)
+const router = useRouter()
 
-/** 副标题逐字浮现 */
-const subtitleChars = 'AI 懂你的巴蜀旅行管家'.split('')
-/** 竖排诗句 */
-const poemLines = ['九天开出一成都', '万户千门入画图']
+/** 输入框内容 */
+const keyword = ref('')
 
-/** 金色粒子（位置/大小/时长随机化） */
+/** 示例问题（胶囊按钮） */
+const EXAMPLE_QUESTIONS = [
+  '帮我规划成都三日游',
+  '讲一讲三星堆的故事',
+  '今天九寨沟适合去吗',
+]
+
+/** 金色粒子（氛围，纯 CSS 动画） */
 const particles = Array.from({ length: 16 }, (_, i) => ({
   id: i,
   left: `${Math.round((i * 6.3 + 7) % 100)}%`,
@@ -33,92 +32,33 @@ const particles = Array.from({ length: 16 }, (_, i) => ({
   delay: `${(i % 7) * 0.9}s`,
 }))
 
-/** 每字的视差 setter（3 ~ 8px） */
-const parallaxSetters: { x: (v: number) => void; y: (v: number) => void; depth: number }[] = []
-let revealed = false
+const rootEl = ref<HTMLElement | null>(null)
+/** 入场动画是否已播放（加载动画结束后由父组件把 active 置为 true） */
+const revealed = ref(false)
 
-function onMouseMove(e: MouseEvent) {
-  const nx = (e.clientX / window.innerWidth - 0.5) * 2
-  const ny = (e.clientY / window.innerHeight - 0.5) * 2
-  parallaxSetters.forEach((s, i) => {
-    // 奇偶反向，四个字形成层次
-    const dir = i % 2 === 0 ? 1 : -1
-    s.x(nx * s.depth * dir)
-    s.y(ny * s.depth * dir)
-  })
-}
-
-/**
- * 首屏入场
- * 1) 主标题逐字「书写」：先描边画轮廓，再填充浮现
- * 2) 副标题逐字、诗句、印章、金线依次到位
- */
-function playReveal() {
-  if (revealed) {
-    return
-  }
-  revealed = true
-
-  const paths = titleEl.value
-    ? Array.from(titleEl.value.querySelectorAll<SVGPathElement>('.hero__glyph path'))
-    : []
-  const subs = subtitleEl.value
-    ? Array.from(subtitleEl.value.querySelectorAll('.hero__sub-char'))
-    : []
-
-  const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-
-  // ---- 逐字书写（描边 → 填充）----
-  paths.forEach((p, i) => {
-    const len = p.getTotalLength()
-    gsap.set(p, { strokeDasharray: len, strokeDashoffset: len, fillOpacity: 0 })
-    tl.to(p, { strokeDashoffset: 0, duration: 1.35, ease: 'power2.inOut' }, i * 0.16).to(
-      p,
-      { fillOpacity: 1, duration: 0.7, ease: 'power1.out' },
-      i * 0.16 + 1.05,
-    )
-  })
-
-  // ---- 其余元素 ----
-  tl.from(subs, { opacity: 0, y: 12, duration: 0.6, stagger: 0.08 }, 0.5)
-    .from(lineEl.value, { scaleX: 0, duration: 1, ease: 'power2.inOut' }, 0)
-    .from(poemEl.value, { opacity: 0, x: 24, duration: 1 }, 0.6)
-    .from(sealEl.value, { opacity: 0, scale: 0.6, duration: 0.9, ease: 'back.out(1.6)' }, 0.8)
-
-  return tl
-}
-
-onMounted(() => {
-  const chars = titleEl.value
-    ? Array.from(titleEl.value.querySelectorAll<HTMLElement>('.hero__char'))
-    : []
-  chars.forEach((el, i) => {
-    parallaxSetters.push({
-      x: gsap.quickTo(el, 'x', { duration: 0.7, ease: 'power3.out' }),
-      y: gsap.quickTo(el, 'y', { duration: 0.7, ease: 'power3.out' }),
-      depth: 3 + i * 1.6,
-    })
-  })
-  window.addEventListener('mousemove', onMouseMove, { passive: true })
-
+function play() {
   if (props.active) {
-    playReveal()
+    revealed.value = true
   }
-})
+}
 
-// 加载动画结束后由父组件把 active 置为 true
-watch(
-  () => props.active,
-  (v) => {
-    if (v) {
-      playReveal()
-    }
-  },
-)
+onMounted(play)
+watch(() => props.active, play)
 
-onUnmounted(() => {
-  window.removeEventListener('mousemove', onMouseMove)
-})
+/** 输入框提交：跳转 /assistant 并自动填入问题 */
+function submit() {
+  const q = keyword.value.trim()
+  if (q) {
+    router.push({ path: '/assistant', query: { q } })
+  } else {
+    router.push('/assistant')
+  }
+}
+
+/** 示例问题：跳转 /assistant 并自动提交 */
+function askExample(q: string) {
+  router.push({ path: '/assistant', query: { q, auto: '1' } })
+}
 
 /** 向下箭头：滚到第二屏 */
 function scrollToNext() {
@@ -128,13 +68,13 @@ function scrollToNext() {
 </script>
 
 <template>
-  <div ref="rootEl" class="hero">
+  <div ref="rootEl" class="agent" :class="{ 'is-in': revealed }">
     <!-- ============ 金色粒子 ============ -->
-    <div class="hero__particles" aria-hidden="true">
+    <div class="agent__particles" aria-hidden="true">
       <span
         v-for="p in particles"
         :key="p.id"
-        class="hero__particle"
+        class="agent__particle"
         :style="{
           left: p.left,
           width: p.size,
@@ -145,74 +85,60 @@ function scrollToNext() {
       />
     </div>
 
-    <!-- ============ 金色细线（左上 → 标题） ============ -->
-    <div ref="lineEl" class="hero__line" aria-hidden="true" />
-
-    <!-- ============ 竖排诗句 ============ -->
-    <div ref="poemEl" class="hero__poem">
-      <span v-for="line in poemLines" :key="line" class="hero__poem-line">{{ line }}</span>
-    </div>
-
-    <!-- ============ 主标题：真实字形轮廓，错落排版 ============ -->
-    <div class="sy-container hero__inner">
-      <h1 ref="titleEl" class="hero__title" aria-label="蜀韵智游">
-        <span v-for="(g, i) in TITLE_GLYPHS" :key="i" class="hero__char">
-          <svg
-            class="hero__glyph"
-            :viewBox="g.viewBox"
-            xmlns="http://www.w3.org/2000/svg"
-            role="img"
-            :aria-label="g.char"
-          >
-            <g :transform="g.transform">
-              <path :d="g.d" />
-            </g>
-          </svg>
-        </span>
-      </h1>
-
-      <!-- 副标题：右下方，逐字浮现 -->
-      <p ref="subtitleEl" class="hero__subtitle">
-        <span v-for="(c, i) in subtitleChars" :key="i" class="hero__sub-char">{{
-          c === ' ' ? ' ' : c
-        }}</span>
+    <!-- ============ 智能体入口 ============ -->
+    <div class="sy-container agent__inner">
+      <!-- 状态徽标：一眼看出「这是一个 AI 智能体」 -->
+      <p class="agent__badge">
+        <span class="agent__badge-dot" aria-hidden="true" />
+        AI 旅行智能体 · 在线
       </p>
-    </div>
 
-    <!-- ============ 右下角印章 ============ -->
-    <div ref="sealEl" class="hero__seal" aria-hidden="true">
-      <svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-        <rect
-          x="2.5"
-          y="2.5"
-          width="59"
-          height="59"
-          rx="7"
-          fill="#8C1F28"
-          stroke="#C9A86A"
-          stroke-width="1.5"
+      <!-- 大标题 -->
+      <h1 class="agent__title">你好，我是蜀韵管家</h1>
+
+      <!-- 副标题 -->
+      <p class="agent__subtitle">一个懂巴蜀文化的 AI 旅行智能体</p>
+
+      <!-- 对话输入框（真能用的入口） -->
+      <form class="agent__ask" @submit.prevent="submit">
+        <input
+          v-model="keyword"
+          class="agent__input"
+          type="text"
+          name="agent-q"
+          autocomplete="off"
+          placeholder="问问我：规划成都三日游 / 讲讲三星堆 / 今天九寨沟适合去吗"
+          @keydown.enter.prevent="submit"
         />
-        <text
-          x="32"
-          y="44"
-          text-anchor="middle"
-          font-size="30"
-          font-weight="900"
-          fill="#C9A86A"
-          font-family="'Source Han Serif SC', serif"
+        <button type="submit" class="agent__send" title="发送" aria-label="发送">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M4 12h15" />
+            <path d="M13 6l6 6-6 6" />
+          </svg>
+        </button>
+      </form>
+
+      <!-- 示例问题 -->
+      <div class="agent__examples">
+        <button
+          v-for="q in EXAMPLE_QUESTIONS"
+          :key="q"
+          type="button"
+          class="agent__chip"
+          @click="askExample(q)"
         >
-          蜀
-        </text>
-      </svg>
+          {{ q }}
+        </button>
+      </div>
     </div>
 
     <!-- ============ 底部：向下探索 ============ -->
-    <button class="hero__foot" @click="scrollToNext">
-      <span class="hero__arrow">
+    <button class="agent__foot" @click="scrollToNext">
+      <span class="agent__arrow">
         <svg
           viewBox="0 0 24 24"
-          width="22"
-          height="22"
+          width="40"
+          height="40"
           fill="none"
           stroke="currentColor"
           stroke-width="1.5"
@@ -223,7 +149,7 @@ function scrollToNext() {
           <path d="M5 13l7 7 7-7" />
         </svg>
       </span>
-      <span class="hero__foot-text">向下探索 · 蜀地千年</span>
+      <span class="agent__foot-text">向下探索 · 蜀韵管家的知识底座</span>
     </button>
   </div>
 </template>
@@ -231,22 +157,25 @@ function scrollToNext() {
 <style scoped lang="scss">
 @use '@/styles/variables' as *;
 
-.hero {
+.agent {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
 /* ---------------- 粒子 ---------------- */
-.hero__particles {
+.agent__particles {
   position: absolute;
   inset: 0;
   z-index: $z-content;
   pointer-events: none;
 }
 
-.hero__particle {
+.agent__particle {
   position: absolute;
   bottom: -10px;
   border-radius: 50%;
@@ -263,10 +192,10 @@ function scrollToNext() {
     opacity: 0;
   }
   15% {
-    opacity: 0.75;
+    opacity: 0.7;
   }
   85% {
-    opacity: 0.35;
+    opacity: 0.3;
   }
   100% {
     transform: translateY(-92vh) scale(1);
@@ -274,151 +203,203 @@ function scrollToNext() {
   }
 }
 
-/* ---------------- 金色细线 ---------------- */
-.hero__line {
-  position: absolute;
-  top: clamp(80px, 12vh, 180px);
-  left: 0;
-  z-index: $z-content;
-  width: clamp(120px, 22vw, 420px);
-  height: 1px;
-  background: linear-gradient(90deg, rgba(201, 168, 106, 0) 0%, $color-gold 100%);
-  transform-origin: left;
-}
-
-/* ---------------- 竖排诗句 ---------------- */
-.hero__poem {
-  position: absolute;
-  top: 18vh;
-  right: clamp(18px, 4vw, 72px);
-  z-index: $z-content;
-  display: flex;
-  flex-direction: row-reverse;
-  gap: clamp(10px, 1.6vw, 26px);
-  writing-mode: vertical-rl;
-  text-orientation: upright;
-  font-family: $font-body;
-  font-size: clamp(14px, 1.1vw, 18px);
-  letter-spacing: 0.35em;
-  color: $color-text-light;
-  opacity: 0.7;
-  text-shadow: $shadow-text-soft;
-}
-
-/* ---------------- 主体 ---------------- */
-.hero__inner {
+/* ---------------- 内容 ---------------- */
+.agent__inner {
   position: relative;
   z-index: $z-content;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  height: 100%;
-  padding-right: 12vw;
+  align-items: center;
+  /* 让开固定导航栏，避免内容被压住 */
+  padding-top: $nav-height;
+  text-align: center;
 }
 
-/* 错落排版：2×2，字号/位置/透明度各不相同
-   注意用 margin 做静态偏移，把 transform 留给 GSAP 视差 */
-.hero__title {
-  display: grid;
-  grid-template-columns: auto auto;
-  align-items: start;
-  column-gap: clamp(6px, 1.4vw, 30px);
-  row-gap: 0;
-  margin-left: clamp(0px, 3vw, 64px);
+/* 状态徽标 */
+.agent__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 20px;
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-pill;
+  background: rgba(16, 30, 48, 0.32);
+  color: $color-gold;
+  font-size: $fs-small;
+  letter-spacing: 0.16em;
+  backdrop-filter: blur(6px);
 }
 
-.hero__char {
-  display: block;
-  will-change: transform;
+.agent__badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #6ee7a8;
+  box-shadow: 0 0 0 0 rgba(110, 231, 168, 0.6);
+  animation: agentPulse 2s ease-out infinite;
+}
 
-  &:nth-child(1) {
-    width: clamp(96px, 13vw, 220px);
-    margin-top: 0;
+@keyframes agentPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(110, 231, 168, 0.55);
   }
-
-  &:nth-child(2) {
-    width: clamp(62px, 8.4vw, 146px);
-    margin-top: clamp(18px, 2.8vw, 54px);
-    opacity: 0.85;
+  70% {
+    box-shadow: 0 0 0 8px rgba(110, 231, 168, 0);
   }
-
-  &:nth-child(3) {
-    width: clamp(62px, 8.4vw, 146px);
-    margin-top: clamp(-18px, -1.4vw, -6px);
-    margin-left: clamp(10px, 1.6vw, 34px);
-    opacity: 0.72;
-  }
-
-  &:nth-child(4) {
-    width: clamp(96px, 13vw, 220px);
-    margin-top: clamp(4px, 0.8vw, 18px);
+  100% {
+    box-shadow: 0 0 0 0 rgba(110, 231, 168, 0);
   }
 }
 
-/* 字形：金色描边 + 亮色填充（填充由入场动画控制） */
-.hero__glyph {
-  display: block;
-  width: 100%;
-  height: auto;
-
-  path {
-    fill: $color-text-light;
-    stroke: $color-gold;
-    stroke-width: 1.5;
-    stroke-linejoin: round;
-    // 描边不随 viewBox 缩放而变粗
-    vector-effect: non-scaling-stroke;
-    filter: drop-shadow(0 2px 18px rgba(0, 0, 0, 0.5));
-  }
-}
-
-/* ---------------- 副标题 ---------------- */
-.hero__subtitle {
-  margin-top: clamp(24px, 4.5vh, 64px);
-  margin-left: clamp(0px, 6vw, 140px);
-  font-family: $font-body;
-  font-size: clamp(18px, 1.6vw, 28px);
-  letter-spacing: 0.3em;
+/* 主标题：56-72px，思源宋体 */
+.agent__title {
+  margin-top: clamp(22px, 3vh, 36px);
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: clamp(40px, 5.2vw, 72px);
+  line-height: 1.16;
+  letter-spacing: 0.02em;
   color: $color-text-light;
   text-shadow: $shadow-text;
 }
 
-.hero__sub-char {
-  display: inline-block;
-  white-space: pre;
+/* 副标题：20px，灰色 */
+.agent__subtitle {
+  margin-top: clamp(14px, 2vh, 22px);
+  font-family: $font-body;
+  font-size: clamp(16px, 1.35vw, 20px);
+  letter-spacing: 0.1em;
+  color: rgba(245, 241, 232, 0.68);
+  text-shadow: $shadow-text-soft;
 }
 
-/* ---------------- 印章 ---------------- */
-.hero__seal {
-  position: absolute;
-  right: clamp(20px, 5vw, 96px);
-  bottom: clamp(88px, 14vh, 168px);
-  z-index: $z-content;
-  width: clamp(52px, 4.6vw, 76px);
-  filter: drop-shadow($shadow-seal);
+/* ---------------- 对话输入框 ---------------- */
+.agent__ask {
+  display: flex;
+  align-items: center;
+  width: min(640px, 100%);
+  height: 64px;
+  margin-top: clamp(28px, 4.5vh, 52px);
+  padding: 6px 6px 6px 26px;
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-pill;
+  background: rgba(14, 30, 50, 0.44);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px);
+  transition:
+    border-color $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo,
+    background-color $duration-normal $ease-out-expo;
+
+  &:focus-within {
+    border-color: $color-gold;
+    background: rgba(14, 30, 50, 0.56);
+    box-shadow:
+      0 18px 48px rgba(0, 0, 0, 0.36),
+      0 0 0 4px rgba(212, 179, 116, 0.16);
+  }
+}
+
+.agent__input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: $color-text-light;
+  font-family: $font-body;
+  font-size: 16px;
+  letter-spacing: 0.02em;
+
+  &::placeholder {
+    color: rgba(245, 241, 232, 0.42);
+  }
+}
+
+/* 右侧金色发送按钮 */
+.agent__send {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f7dd93 0%, $color-gold 58%, #b9882f 100%);
+  color: $color-ink;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(212, 179, 116, 0.36);
+  transition:
+    transform $duration-fast $ease-out-expo,
+    box-shadow $duration-fast $ease-out-expo,
+    filter $duration-fast $ease-out-expo;
+
+  &:hover {
+    transform: translateX(2px) scale(1.05);
+    filter: brightness(1.06);
+    box-shadow: 0 10px 26px rgba(212, 179, 116, 0.5);
+  }
+
+  &:active {
+    transform: translateX(1px) scale(0.98);
+  }
+}
+
+/* ---------------- 示例问题 ---------------- */
+.agent__examples {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: clamp(18px, 2.6vh, 28px);
+}
+
+.agent__chip {
+  padding: 11px 22px;
+  border: 1px solid $color-border-gold-light;
+  border-radius: $radius-pill;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(245, 241, 232, 0.9);
+  font-family: $font-body;
+  font-size: $fs-small;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition:
+    background-color $duration-normal $ease-out-expo,
+    border-color $duration-normal $ease-out-expo,
+    color $duration-normal $ease-out-expo,
+    transform $duration-normal $ease-out-expo;
+
+  &:hover {
+    transform: translateY(-2px);
+    border-color: $color-gold;
+    background: rgba(212, 179, 116, 0.16);
+    color: $color-text-light;
+  }
 }
 
 /* ---------------- 底部 ---------------- */
-.hero__foot {
+.agent__foot {
   position: absolute;
   left: 50%;
-  bottom: clamp(24px, 5vh, 56px);
+  bottom: clamp(22px, 4.5vh, 52px);
   z-index: $z-content;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
   transform: translateX(-50%);
   color: $color-text-light;
 }
 
-.hero__arrow {
+.agent__arrow {
   display: grid;
   place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid $color-gold-line;
+  width: 76px;
+  height: 76px;
+  border: 2px solid $color-gold-line;
   border-radius: 50%;
   color: $color-gold;
   animation: breathe 2s ease-in-out infinite;
@@ -436,36 +417,80 @@ function scrollToNext() {
   }
 }
 
-.hero__foot-text {
+.agent__foot-text {
   font-size: $fs-small;
-  letter-spacing: 0.3em;
+  letter-spacing: 0.28em;
   opacity: 0.8;
   text-shadow: $shadow-text-soft;
 }
 
-/* ---------------- 响应式 ---------------- */
-@media (max-width: 1024px) {
-  .hero__inner {
-    padding-right: $gutter;
+/* ---------------- 入场（加载结束后依次浮现） ---------------- */
+.agent__badge,
+.agent__title,
+.agent__subtitle,
+.agent__ask,
+.agent__examples {
+  opacity: 0;
+  transform: translateY(20px);
+  transition:
+    opacity 0.75s $ease-out-expo,
+    transform 0.75s $ease-out-expo;
+}
+
+.agent.is-in {
+  .agent__badge {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.05s;
   }
 
-  .hero__poem {
-    display: none;
+  .agent__title {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.18s;
   }
 
-  .hero__seal {
-    bottom: clamp(96px, 18vh, 200px);
+  .agent__subtitle {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.3s;
+  }
+
+  .agent__ask {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.42s;
+  }
+
+  .agent__examples {
+    opacity: 1;
+    transform: none;
+    transition-delay: 0.54s;
   }
 }
 
+/* ---------------- 响应式 ---------------- */
 @media (max-width: 768px) {
-  .hero__title {
-    margin-left: 0;
+  .agent__ask {
+    height: 58px;
+    padding-left: 18px;
   }
 
-  .hero__subtitle {
-    margin-left: 0;
-    letter-spacing: 0.18em;
+  .agent__send {
+    width: 46px;
+    height: 46px;
+  }
+
+  .agent__input {
+    font-size: 14px;
+  }
+
+  .agent__examples {
+    gap: 10px;
+  }
+
+  .agent__chip {
+    padding: 9px 16px;
   }
 }
 </style>

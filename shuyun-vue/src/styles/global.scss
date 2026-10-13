@@ -11,7 +11,26 @@
 // 蜀锦纹理 / 噪点的变量定义已移到 variables.scss（$pattern-brocade / $pattern-noise）
 
 // ---------- CSS 自定义属性（兼容旧页面 + 供 JS 读取） ----------
+// ---- 主题令牌（--sy-*）：由 <html data-theme="day|night"> 切换 ----
+// 默认：白天模式（亮暖底色 + 泛金光），夜间模式见下方 [data-theme='night'] 覆盖
 :root {
+  // 底色（页面 / 面板 / 卡片）
+  --sy-paper: #f6f1e6; // 页面底色（宣纸米）
+  --sy-paper-rgb: 246, 241, 230; // 同上，RGB 分量（供毛玻璃 / 半透明叠加）
+  --sy-surface-rgb: 255, 255, 255; // 卡片 / 面板底色分量
+  // 深色块（导航磨砂 / 页脚 / 全屏底）
+  --sy-ink: #0e2a47;
+  // 正文与强调色
+  --sy-text-dark: #1a1a1a; // 浅底正文
+  --sy-text-rgb: 26, 26, 26; // 同上，RGB 分量（供各级透明度文字）
+  --sy-accent: #7a1a22; // 强调文字（蜀锦红）
+  --sy-border: #e0d8c8; // 浅色描边
+  // 光晕 / 导航
+  --sy-glow: rgba(255, 208, 122, 0.5); // 泛金光（顶部光晕）
+  --sy-glow-soft: rgba(212, 179, 116, 0.22); // 泛金光（描边 / 阴影）
+  --sy-nav-solid: rgba(14, 42, 71, 0.85); // 滚动后导航磨砂底
+  --sy-nav-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 26px var(--sy-glow-soft);
+
   --color-primary: #{$color-primary};
   --color-ink: #{$color-ink};
   --color-gold: #{$color-gold};
@@ -38,17 +57,77 @@
   --el-text-color-secondary: #{rgba(26, 26, 26, 0.52)};
 
   --el-border-radius-base: 10px;
-  --el-border-color: #{rgba(201, 168, 106, 0.42)};
-  --el-border-color-light: #{rgba(201, 168, 106, 0.3)};
-  --el-border-color-lighter: #{rgba(201, 168, 106, 0.18)};
+  --el-border-color: #{rgba(212, 179, 116, 0.42)};
+  --el-border-color-light: #{rgba(212, 179, 116, 0.3)};
+  --el-border-color-lighter: #{rgba(212, 179, 116, 0.18)};
 
-  --el-input-border-color: #{rgba(201, 168, 106, 0.45)};
+  --el-input-border-color: #{rgba(212, 179, 116, 0.45)};
   --el-input-hover-border-color: #{$color-gold};
   --el-input-focus-border-color: #{$color-gold};
   --el-input-text-color: #{$color-text-dark};
 
   --el-font-family: #{$font-body};
   --el-box-shadow-light: #{$shadow-md};
+
+  // ---------- 后台管理端主题令牌（--admin-*）：默认白天 = 白金色 ----------
+  --admin-bg: #f4ecdb; // 页面底：白金
+  --admin-panel: #fffdf7; // 面板：近白
+  --admin-panel-2: #f3ead7; // 次级面板 / 内嵌区块
+  --admin-border: rgba(176, 122, 16, 0.22); // 金色描边
+  --admin-text: #2c2415; // 主文字：深墨棕
+  --admin-text-muted: #8a795a; // 次要文字：暖灰金
+  --admin-gold: #b07c10; // 金色高亮（浅底用深金）
+  --admin-gold-soft: rgba(176, 122, 16, 0.1);
+  --admin-gold-line: rgba(176, 122, 16, 0.35);
+  --admin-shadow: 0 18px 40px rgba(120, 92, 30, 0.14);
+  --admin-glass: rgba(255, 253, 247, 0.78);
+  --admin-glass-rgb: 255, 253, 247;
+  --admin-mask-rgb: 244, 236, 219;
+}
+
+// ---------- 夜间模式（深夜蓝基调，刻意不做纯黑） ----------
+html[data-theme='night'] {
+  --sy-paper: #0d1626; // 页面底色：深夜蓝
+  --sy-paper-rgb: 13, 22, 38;
+  --sy-surface-rgb: 30, 43, 62; // 卡片 / 面板：比底色略亮，形成层次
+  --sy-ink: #08111e; // 深色块：更沉的夜蓝
+  --sy-text-dark: #e8eef7; // 浅底正文：冷白
+  --sy-text-rgb: 232, 238, 247;
+  --sy-accent: #ef8b96; // 强调文字：亮胭脂红（暗底可读）
+  --sy-border: rgba(120, 152, 194, 0.28); // 冷色描边
+  --sy-glow: rgba(78, 138, 210, 0.28); // 冷色光晕
+  --sy-glow-soft: rgba(78, 138, 210, 0.18);
+  --sy-nav-solid: rgba(126, 176, 214, 0.92); // 导航磨砂底：淡蓝色
+  --sy-nav-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), 0 0 26px var(--sy-glow-soft);
+
+  // Element Plus 弹层 / 输入 / 文字跟随暗色主题
+  --el-text-color-primary: #e8eef7;
+  --el-text-color-regular: rgba(232, 238, 247, 0.78);
+  --el-text-color-secondary: rgba(232, 238, 247, 0.52);
+  --el-bg-color: #1b2738;
+  --el-bg-color-overlay: #1b2738;
+  --el-fill-color-blank: #1b2738;
+  --el-fill-color-light: rgba(120, 152, 194, 0.08);
+  --el-border-color: rgba(120, 152, 194, 0.3);
+  --el-border-color-light: rgba(120, 152, 194, 0.22);
+  --el-border-color-lighter: rgba(120, 152, 194, 0.14);
+  --el-input-text-color: #e8eef7;
+  --el-input-border-color: rgba(120, 152, 194, 0.35);
+
+  // ---------- 后台管理端主题令牌（--admin-*）：夜间 = 高级蓝 ----------
+  --admin-bg: #0a1628;
+  --admin-panel: #12233d;
+  --admin-panel-2: #0e1b30;
+  --admin-border: rgba(212, 179, 116, 0.15);
+  --admin-text: #f0ebe0;
+  --admin-text-muted: #7a8aa0;
+  --admin-gold: #d4b374;
+  --admin-gold-soft: rgba(212, 179, 116, 0.12);
+  --admin-gold-line: rgba(212, 179, 116, 0.35);
+  --admin-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  --admin-glass: rgba(18, 35, 61, 0.72);
+  --admin-glass-rgb: 18, 35, 61;
+  --admin-mask-rgb: 10, 22, 40;
 }
 
 // ---------- reset ----------
@@ -71,6 +150,10 @@ html {
 
 body {
   background-color: $color-paper;
+  // 顶部一层柔和光晕：白天泛金光、夜间泛蓝光（随主题变量变化）
+  background-image: radial-gradient(130% 80% at 50% -18%, var(--sy-glow) 0%, transparent 58%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
   color: $color-text-dark;
   font-family: $font-body;
   font-size: $fs-body;
@@ -79,6 +162,9 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  transition:
+    background-color $duration-slow $ease-out-expo,
+    color $duration-slow $ease-out-expo;
 }
 
 h1,
@@ -140,21 +226,21 @@ select {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(201, 168, 106, 0.08);
+  background: rgba(212, 179, 116, 0.08);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(201, 168, 106, 0.55);
+  background: rgba(212, 179, 116, 0.55);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(201, 168, 106, 0.85);
+  background: rgba(212, 179, 116, 0.85);
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(201, 168, 106, 0.55) rgba(201, 168, 106, 0.08);
+  scrollbar-color: rgba(212, 179, 116, 0.55) rgba(212, 179, 116, 0.08);
 }
 
 // ---------- 自定义光标 ----------
@@ -231,8 +317,92 @@ textarea,
   -webkit-text-stroke: 1.5px $color-gold;
 }
 
-// ---------- 按钮：主（金色描边→hover 填充） ----------
+// ---------- 品牌书法艺术字（金色立体 · 连体字标） ----------
+// 用在导航栏 / 首屏主标题 / 登录页 / 页脚 / 后台品牌名，全站统一。
+// 字体：华文行楷（书写体，子集化后约 27KB，见 fonts.scss 的 @font-face）。
+// 做法：金色多段渐变「裁切到文字」+ 逐层 em 位移阴影堆厚度 + 光带扫过。
+// 阴影偏移全部用 em，所以 20px 的小字与 140px 的大字观感一致。
+// 用法：<span class="sy-brand-text" style="font-size:32px">蜀韵·智游</span>
+//   可选变量：
+//     --shine      光带扫过周期（默认 3s）
+//     --brand-gap  字距；负值让相邻字笔画相接，做出「连体」效果（默认 -0.1em）
+.sy-brand-text {
+  position: relative;
+  display: inline-block;
+  font-family: $font-calligraphy;
+  font-weight: 400;
+  /* 负字距 = 连体关键：让相邻字笔画互相咬合 */
+  letter-spacing: var(--brand-gap, -0.1em);
+  line-height: 1.16;
+  white-space: nowrap;
+
+  // color 只作为 text-shadow 的取色基准；文字本体用渐变填充
+  color: #8b6520;
+  -webkit-text-fill-color: transparent;
+
+  // 第一层：扫光光带（透明；靠背景位移扫过）；第二层：金属金渐变
+  background-image:
+    linear-gradient(
+      110deg,
+      rgba(255, 255, 255, 0) 40%,
+      rgba(255, 255, 255, 0.9) 50%,
+      rgba(255, 255, 255, 0) 60%
+    ),
+    linear-gradient(
+      180deg,
+      #ffedb8 0%,
+      #ffd966 20%,
+      #d4b374 50%,
+      #a67c2e 80%,
+      #8b6520 100%
+    );
+  background-size:
+    200% 100%,
+    100% 100%;
+  background-repeat: no-repeat, no-repeat;
+  background-position:
+    120% 0,
+    0 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  // 细描边让字形更挺立
+  -webkit-text-stroke: 0.02em #a67c2e;
+
+  // 逐层位移阴影 = 金属厚度；最后一层是金色外光
+  text-shadow:
+    0 0.03em 0 #a67c2e,
+    0 0.06em 0 #8b6520,
+    0 0.09em 0 #7a5618,
+    0 0.12em 0.2em rgba(0, 0, 0, 0.42),
+    0 0 0.7em rgba(255, 230, 160, 0.55);
+
+  animation: sy-gold-shine var(--shine, 3s) ease-in-out infinite;
+}
+
+// 光带从左扫到右（背景尺寸 200%，位移 120% → -20% 刚好扫过整段文字）
+@keyframes sy-gold-shine {
+  0% {
+    background-position:
+      120% 0,
+      0 0;
+  }
+  60% {
+    background-position:
+      -20% 0,
+      0 0;
+  }
+  100% {
+    background-position:
+      -20% 0,
+      0 0;
+  }
+}
+
+// ---------- 按钮：主（金色描边→hover 填充 + 光泽流动） ----------
 .sy-btn {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -251,7 +421,30 @@ textarea,
   &:hover {
     background-color: $color-gold;
     color: $color-ink;
-    box-shadow: 0 12px 30px rgba(201, 168, 106, 0.3);
+    box-shadow: 0 12px 30px rgba(212, 179, 116, 0.32);
+  }
+
+  // 光泽流动：hover 时一道金光从左扫到右
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -120%;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+    transform: skewX(-18deg);
+    pointer-events: none;
+  }
+
+  &:hover::before {
+    animation: sy-sheen 0.9s $ease-out-expo;
+  }
+}
+
+@keyframes sy-sheen {
+  to {
+    left: 130%;
   }
 }
 
@@ -326,13 +519,27 @@ textarea,
 }
 
 .sy-page-title {
+  position: relative;
   margin-top: 12px;
+  padding-left: 18px;
   font-family: $font-title;
   font-weight: 900;
   font-size: $fs-h1;
   line-height: 1.1;
   letter-spacing: 0.1em;
-  color: $color-primary;
+  color: var(--sy-accent);
+
+  // 章节标题左侧金色短竖条
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0.18em;
+    left: 0;
+    width: 4px;
+    height: 0.82em;
+    border-radius: 2px;
+    background: linear-gradient(180deg, $color-gold, rgba(212, 179, 116, 0.35));
+  }
 }
 
 .sy-page-desc {
@@ -341,14 +548,14 @@ textarea,
   font-family: $font-body;
   font-size: $fs-body;
   line-height: 1.9;
-  color: rgba(26, 26, 26, 0.68);
+  color: rgba(var(--sy-text-rgb), 0.68);
 }
 
 // 面板：金色细边 + 半透明
 .sy-panel {
-  border: 1px solid rgba(201, 168, 106, 0.42);
+  border: 1px solid rgba(212, 179, 116, 0.42);
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(var(--sy-surface-rgb), 0.6);
   box-shadow: $shadow-md;
 }
 

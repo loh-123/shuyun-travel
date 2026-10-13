@@ -1,0 +1,99 @@
+// ============================================================
+// 后台管理端设计令牌（深色 · 高端数据控制台）
+// 与前台「蜀锦红 / 金沙金」设计语言呼应，但整体采用深墨蓝基调
+// 组件内用法：@use '@/admin/styles/admin-tokens' as *;
+// ============================================================
+
+// ------------------------------------------------------------
+// 1. 颜色
+// ------------------------------------------------------------
+// 主题相关颜色由 CSS 变量驱动（见 styles/global.scss 的 --admin-* 区块）：
+// 白天 = 白金色，夜间 = 高级蓝，随 <html data-theme> 自动切换
+$admin-bg: var(--admin-bg); // 页面背景
+$admin-panel: var(--admin-panel); // 面板背景
+$admin-panel-2: var(--admin-panel-2); // 次级面板（更暗，用于内嵌区块）
+$admin-border: var(--admin-border); // 描边
+$admin-text: var(--admin-text); // 主文字
+$admin-text-muted: var(--admin-text-muted); // 次要文字
+$admin-gold: var(--admin-gold); // 金色高亮
+// 固定强调色（数据可视化用，不随主题变化）
+$admin-red: #7a1a22; // 蜀锦红
+$admin-green: #3a5a40; // 竹青
+$admin-blue: #4a7db5; // 数据蓝
+
+// 派生色
+$admin-gold-soft: var(--admin-gold-soft);
+$admin-gold-line: var(--admin-gold-line);
+$admin-green-up: #4caf7d; // 上涨
+$admin-red-down: #d05c62; // 下跌
+
+// ------------------------------------------------------------
+// 2. 尺寸与层次
+// ------------------------------------------------------------
+$admin-sidebar-w: 240px;
+$admin-sidebar-w-collapsed: 76px;
+$admin-header-h: 64px;
+$admin-radius: 14px;
+$admin-radius-sm: 10px;
+$admin-gap: 20px;
+
+// ------------------------------------------------------------
+// 3. 字体与动效
+// ------------------------------------------------------------
+$admin-font-num: 'Georgia', 'Songti SC', serif;
+$admin-ease: cubic-bezier(0.22, 1, 0.36, 1);
+$admin-shadow: var(--admin-shadow);
+
+// ------------------------------------------------------------
+// 4. 可复用 mixin
+// ------------------------------------------------------------
+
+/// 磨砂玻璃
+@mixin admin-glass($bg: var(--admin-glass), $blur: 18px) {
+  background: $bg;
+  backdrop-filter: blur($blur);
+  -webkit-backdrop-filter: blur($blur);
+}
+
+/// 标准面板卡片
+@mixin admin-card($radius: 0) {
+  background: $admin-panel;
+  border: 1px solid $admin-border;
+  border-radius: $radius;
+}
+
+/// 科技机械边框：直角 + 四角 L 形金色角标（附加在卡片上）
+@mixin admin-tech-frame($accent: var(--admin-gold-line), $len: 16px, $w: 2px) {
+  position: relative;
+  border-radius: 0;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      linear-gradient($accent, $accent) left top / #{$len} #{$w} no-repeat,
+      linear-gradient($accent, $accent) left top / #{$w} #{$len} no-repeat,
+      linear-gradient($accent, $accent) right top / #{$len} #{$w} no-repeat,
+      linear-gradient($accent, $accent) right top / #{$w} #{$len} no-repeat,
+      linear-gradient($accent, $accent) left bottom / #{$len} #{$w} no-repeat,
+      linear-gradient($accent, $accent) left bottom / #{$w} #{$len} no-repeat,
+      linear-gradient($accent, $accent) right bottom / #{$len} #{$w} no-repeat,
+      linear-gradient($accent, $accent) right bottom / #{$w} #{$len} no-repeat;
+  }
+}
+
+/// 卡片 hover 轻微上浮
+@mixin admin-lift($y: -4px) {
+  transition:
+    transform 0.4s $admin-ease,
+    box-shadow 0.4s $admin-ease,
+    border-color 0.4s $admin-ease;
+
+  &:hover {
+    transform: translateY($y);
+    box-shadow: $admin-shadow;
+    border-color: $admin-gold-line;
+  }
+}

@@ -9,6 +9,14 @@ export interface ApiResult<T = any> {
   data: T
 }
 
+/** 分页结果（对应后端 PageResult<T>） */
+export interface PageResult<T = any> {
+  total: number
+  records: T[]
+  page: number
+  size: number
+}
+
 // 扩展 axios 配置：silent 为 true 时不弹错误提示（用于首屏可选/公开数据请求）
 declare module 'axios' {
   export interface AxiosRequestConfig {
@@ -20,8 +28,9 @@ declare module 'axios' {
 export const TOKEN_KEY = 'token'
 
 const request = axios.create({
-  baseURL: '/api',
-  timeout: 15000,
+  // 生产环境由 .env.production 的 VITE_API_BASE_URL 指向后端域名；本地回退 /api 走 Vite 代理
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 30000,
 })
 
 // ---------- 请求拦截器：附带 token ----------

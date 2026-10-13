@@ -58,6 +58,10 @@ public class UserController {
     @Value("${shuyun.upload-dir:./upload}")
     private String uploadDir;
 
+    /** 外部访问基础地址：前后端分域部署时拼接上传文件绝对地址（本地留空返回相对路径） */
+    @Value("${shuyun.base-url:}")
+    private String baseUrl;
+
     /**
      * 当前登录用户信息
      *
@@ -111,7 +115,7 @@ public class UserController {
         String fileName = UUID.randomUUID().toString().replace("-", "") + "." + ext;
         file.transferTo(dir.resolve(fileName).toFile());
 
-        String url = "/upload/avatar/" + fileName;
+        String url = baseUrl + "/upload/avatar/" + fileName;
         userService.updateAvatar(UserContext.getUserId(), url);
         return Result.ok(url);
     }

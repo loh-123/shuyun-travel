@@ -436,3 +436,371 @@ UPDATE `culture`
 SET `tags` = CONCAT(IFNULL(`tags`, ''), ',火锅')
 WHERE `id` = 3
   AND IFNULL(`tags`, '') NOT LIKE '%火锅%';
+
+-- ============================================================================
+-- 19. 默认管理员账号（用户名 XM）
+--     密码为 BCrypt 加密后的值；首次登录后台后请尽快修改密码。
+--     使用 INSERT ... ON DUPLICATE KEY UPDATE：可重复执行，并会修正密码与角色。
+--     另先清理早期示例账号 admin（仅当其邮箱仍为初始值时），避免残留。
+-- ============================================================================
+DELETE FROM `user`
+WHERE `username` = 'admin' AND `email` = 'admin@shuyun-travel.com';
+
+INSERT INTO `user` (`username`, `email`, `password`, `role`, `status`, `bio`)
+VALUES ('XM',
+        'xm@shuyun-travel.com',
+        '$2a$10$Nqnze7pX3SQ00XLsRnq9.uwJXLJ5nGD3UYIifZCBkm.LYkO1NgUhq',
+        'ADMIN',
+        1,
+        '系统管理员')
+ON DUPLICATE KEY UPDATE `password` = VALUES(`password`),
+                        `role`     = 'ADMIN',
+                        `status`   = 1,
+                        `deleted`  = 0;
+
+-- ============================================================================
+-- 20. user_feedback 问题反馈表
+--     用户后台「问题反馈」提交，管理员后台查看与处理
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `user_feedback` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`     BIGINT       NOT NULL                COMMENT '提交用户ID',
+    `type`        VARCHAR(30)           DEFAULT NULL   COMMENT '反馈类型',
+    `content`     TEXT                                  COMMENT '反馈内容',
+    `contact`     VARCHAR(100)          DEFAULT NULL   COMMENT '联系方式（可选）',
+    `status`      TINYINT               DEFAULT 0      COMMENT '状态：0-待处理，1-已处理',
+    `reply`       VARCHAR(500)          DEFAULT NULL   COMMENT '管理员回复',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_status` (`status`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '问题反馈表';
+
+-- ============================================================================
+-- 21. scenic_spot 扩展字段：推荐理由（仅首次执行时新增列，已存在则跳过）
+-- ============================================================================
+SET @has_reason := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'scenic_spot' AND COLUMN_NAME = 'recommend_reason');
+SET @ddl_reason := IF(@has_reason = 0,
+                      'ALTER TABLE `scenic_spot` ADD COLUMN `recommend_reason` VARCHAR(255) DEFAULT NULL COMMENT ''推荐理由'' AFTER `tags`',
+                      'SELECT 1');
+PREPARE stmt_reason FROM @ddl_reason;
+EXECUTE stmt_reason;
+DEALLOCATE PREPARE stmt_reason;
+
+-- ============================================================================
+-- 22. culture 扩展字段：浏览量（仅首次执行时新增列） + 示例浏览数据（可重复执行）
+-- ============================================================================
+SET @has_cview := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'culture' AND COLUMN_NAME = 'view_count');
+SET @ddl_cview := IF(@has_cview = 0,
+                     'ALTER TABLE `culture` ADD COLUMN `view_count` INT NOT NULL DEFAULT 0 COMMENT ''浏览次数（人气）'' AFTER `tags`',
+                     'SELECT 1');
+PREPARE stmt_cview FROM @ddl_cview;
+EXECUTE stmt_cview;
+DEALLOCATE PREPARE stmt_cview;
+
+UPDATE `culture` SET `view_count` = 2140 WHERE `id` = 1;
+UPDATE `culture` SET `view_count` = 1760 WHERE `id` = 2;
+UPDATE `culture` SET `view_count` = 2580 WHERE `id` = 3;
+UPDATE `culture` SET `view_count` = 940  WHERE `id` = 4;
+UPDATE `culture` SET `view_count` = 1320 WHERE `id` = 5;
+UPDATE `culture` SET `view_count` = 1680 WHERE `id` = 6;
+UPDATE `culture` SET `view_count` = 2960 WHERE `id` = 7;
+UPDATE `culture` SET `view_count` = 1080 WHERE `id` = 8;
+
+-- ============================================================================
+-- 23. user 扩展字段：最后登录时间（仅首次执行时新增列），登录成功时由后端更新
+-- ============================================================================
+SET @has_login := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user' AND COLUMN_NAME = 'last_login_time');
+SET @ddl_login := IF(@has_login = 0,
+                     'ALTER TABLE `user` ADD COLUMN `last_login_time` DATETIME DEFAULT NULL COMMENT ''最后登录时间'' AFTER `update_time`',
+                     'SELECT 1');
+PREPARE stmt_login FROM @ddl_login;
+EXECUTE stmt_login;
+DEALLOCATE PREPARE stmt_login;
+
+-- ============================================================================
+-- 24. user_note 扩展字段：审核状态 / 拒绝理由（仅首次执行时新增列）
+-- ============================================================================
+SET @has_audit := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                   WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_note' AND COLUMN_NAME = 'audit_status');
+SET @ddl_audit := IF(@has_audit = 0,
+                     'ALTER TABLE `user_note` ADD COLUMN `audit_status` TINYINT DEFAULT 0 COMMENT ''审核状态：0-待审核，1-已通过，2-已拒绝'' AFTER `tags`, ADD COLUMN `reject_reason` VARCHAR(255) DEFAULT NULL COMMENT ''拒绝理由'' AFTER `audit_status`',
+                     'SELECT 1');
+PREPARE stmt_audit FROM @ddl_audit;
+EXECUTE stmt_audit;
+DEALLOCATE PREPARE stmt_audit;
+
+-- ============================================================================
+-- 25. user_ai_chat 扩展字段：标记类型（仅首次执行时新增列）
+--     0-未标记，1-优质对话，2-训练语料
+-- ============================================================================
+SET @has_mark := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                  WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_ai_chat' AND COLUMN_NAME = 'mark_type');
+SET @ddl_mark := IF(@has_mark = 0,
+                    'ALTER TABLE `user_ai_chat` ADD COLUMN `mark_type` TINYINT DEFAULT 0 COMMENT ''标记类型：0-未标记，1-优质对话，2-训练语料'' AFTER `tokens`',
+                    'SELECT 1');
+PREPARE stmt_mark FROM @ddl_mark;
+EXECUTE stmt_mark;
+DEALLOCATE PREPARE stmt_mark;
+
+-- ============================================================================
+-- 26. email_subscription 邮箱订阅表
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `email_subscription` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `email`       VARCHAR(120) NOT NULL                COMMENT '订阅邮箱',
+    `source`      VARCHAR(50)           DEFAULT NULL   COMMENT '订阅来源',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_email` (`email`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '邮箱订阅表';
+
+-- 27. 邮箱订阅示例数据（可重复执行，已存在则跳过）
+INSERT IGNORE INTO `email_subscription` (`id`, `email`, `source`) VALUES
+(1, 'traveler01@example.com', '首页订阅'),
+(2, 'wenlv@example.com',      '首页订阅'),
+(3, 'shuyun-fan@example.com', '文化详情页'),
+(4, 'panda-lover@example.com','景点详情页'),
+(5, 'scenic@example.com',     '首页订阅');
+
+-- ============================================================================
+-- 28. user_notification 站内信表
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `user_notification` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`     BIGINT       NOT NULL                COMMENT '接收用户ID',
+    `title`       VARCHAR(120)          DEFAULT NULL   COMMENT '标题',
+    `content`     VARCHAR(500)          DEFAULT NULL   COMMENT '内容',
+    `type`        VARCHAR(30)           DEFAULT NULL   COMMENT '类型：NOTE_AUDIT / SYSTEM',
+    `is_read`     TINYINT               DEFAULT 0      COMMENT '是否已读：0-未读，1-已读',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '站内信表';
+
+-- ============================================================================
+-- 29. backup_history 备份历史表
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `backup_history` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `filename`    VARCHAR(255) NOT NULL                COMMENT '文件名',
+    `tables`      VARCHAR(500)          DEFAULT NULL   COMMENT '包含的表（逗号分隔）',
+    `size`        BIGINT                DEFAULT 0      COMMENT '文件大小（字节）',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '备份历史表';
+
+-- ============================================================================
+-- 30. 后台展示用测试假数据（幂等：显式主键 + INSERT IGNORE，可重复执行）
+--     说明：使用“数字表”交叉连接生成序号，避开对递归 CTE 的版本依赖
+-- ============================================================================
+
+-- 30.1 50 条用户（id 1001..1050，密码与管理员一致，均为 123456 对应的 BCrypt）
+INSERT IGNORE INTO `user` (`id`, `username`, `email`, `password`, `bio`, `role`, `status`, `create_time`)
+SELECT 1001 + seq.n,
+       CONCAT('traveler', 1001 + seq.n),
+       CONCAT('traveler', 1001 + seq.n, '@example.com'),
+       '$2a$10$Nqnze7pX3SQ00XLsRnq9.uwJXLJ5nGD3UYIifZCBkm.LYkO1NgUhq',
+       '热爱蜀地风物的旅行者',
+       'USER', 1,
+       DATE_SUB(NOW(), INTERVAL (seq.n * 3) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+WHERE seq.n < 50;
+
+-- 30.2 100 条景点浏览记录（user 1001..1050，景点 1..19）
+INSERT IGNORE INTO `user_view_history`
+(`id`, `user_id`, `target_type`, `target_id`, `target_name`, `cover_image`, `sub_title`, `view_time`)
+SELECT 1001 + seq.n, 1001 + (seq.n % 50), 'SCENIC', s.id, s.name, s.cover_image, c.name,
+       DATE_SUB(NOW(), INTERVAL (seq.n % 20) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+JOIN scenic_spot s ON s.id = 1 + (seq.n % 19)
+LEFT JOIN city c ON c.id = s.city_id
+WHERE seq.n < 100;
+
+-- 30.3 30 条用户收藏记录
+INSERT IGNORE INTO `user_collection` (`id`, `user_id`, `target_type`, `target_id`, `create_time`)
+SELECT 1001 + seq.n, 1001 + (seq.n % 50), 'SCENIC', 1 + (seq.n % 19),
+       DATE_SUB(NOW(), INTERVAL (seq.n % 15) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+WHERE seq.n < 30;
+
+-- 30.4 20 条 AI 对话记录（10 段会话，每段 1 问 1 答）
+INSERT IGNORE INTO `user_ai_chat`
+(`id`, `user_id`, `session_id`, `role`, `content`, `tokens`, `mark_type`, `create_time`)
+SELECT 1001 + seq.n, 1001 + (seq.n % 50), CONCAT('sess-seed-', seq.n DIV 2),
+       IF(seq.n % 2 = 0, 'user', 'assistant'),
+       IF(seq.n % 2 = 0,
+          ELT(1 + (seq.n % 5), '帮我规划成都三日游', '川剧变脸有什么看点', '九寨沟什么时候去最美', '四川有哪些必吃的川菜', '今天成都天气怎么样'),
+          '好的，我来为你整理一份建议，记得结合季节与同行人调整节奏。'),
+       0, 0, DATE_SUB(NOW(), INTERVAL (seq.n % 10) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+WHERE seq.n < 20;
+
+-- 30.5 15 条用户行程
+INSERT IGNORE INTO `user_trip`
+(`id`, `user_id`, `title`, `days`, `companion`, `interests`, `budget`, `status`, `create_time`)
+SELECT 1001 + seq.n, 1001 + (seq.n % 50),
+       CONCAT('川西自驾 ', 3 + (seq.n % 4), ' 日计划'),
+       3 + (seq.n % 4),
+       ELT(1 + (seq.n % 5), '独自', '情侣', '亲子', '父母', '朋友'),
+       '自然风光,人文古迹,古镇',
+       3000 + seq.n * 200, 1, DATE_SUB(NOW(), INTERVAL (seq.n % 18) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+WHERE seq.n < 15;
+
+-- 30.6 45 条行程每日明细（15 条行程 × 3 天）
+INSERT IGNORE INTO `user_trip_day`
+(`id`, `trip_id`, `day_index`, `date`, `scenic_id`, `scenic_name`, `stay_duration`, `transport`, `food`, `tips`)
+SELECT 1001 + seq.n, 1001 + (seq.n DIV 3), 1 + (seq.n % 3),
+       DATE_ADD(CURDATE(), INTERVAL (seq.n % 3) DAY),
+       s.id, s.name,
+       ELT(1 + (seq.n % 3), '2 小时', '3 小时', '半天'),
+       ELT(1 + (seq.n % 3), '自驾', '城际高铁', '步行'),
+       '当地特色小吃',
+       '早晚温差大，注意增减衣物'
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+JOIN scenic_spot s ON s.id = 1 + (seq.n % 19)
+WHERE seq.n < 45;
+
+-- 30.7 10 条用户笔记（审核状态 0/1/2 交错）
+INSERT IGNORE INTO `user_note` (`id`, `user_id`, `title`, `content`, `tags`, `audit_status`, `create_time`)
+SELECT 1001 + seq.n, 1001 + (seq.n % 50),
+       CONCAT('旅行随笔 ', 1001 + seq.n),
+       '这次出行收获很多，沿途的风景与美食都值得记录。成都的慢生活、都江堰的壮阔，都让人印象深刻。',
+       '旅行,随笔', (seq.n % 3), DATE_SUB(NOW(), INTERVAL (seq.n % 12) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+WHERE seq.n < 10;
+
+-- 30.8 5 条反馈记录
+INSERT IGNORE INTO `user_feedback` (`id`, `user_id`, `type`, `content`, `contact`, `status`, `create_time`)
+SELECT 1001 + seq.n, 1001 + (seq.n % 50), '功能建议',
+       CONCAT('希望增加更多川西小众景点与实用攻略（编号 ', seq.n, '）'),
+       CONCAT('traveler', 1001 + (seq.n % 50), '@example.com'),
+       (seq.n % 2), DATE_SUB(NOW(), INTERVAL (seq.n % 6) DAY)
+FROM (SELECT a.n + b.n * 10 AS n
+      FROM (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) a
+      CROSS JOIN
+           (SELECT 0 AS n UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4
+            UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 UNION ALL SELECT 8 UNION ALL SELECT 9) b) seq
+WHERE seq.n < 5;
+
+-- ============================================================================
+-- 31. user_ai_chat 扩展字段：调用观测指标（仅首次执行时新增列）
+--     记录每次 AI 请求的输入/输出长度、耗时、是否成功
+-- ============================================================================
+SET @has_ai_metrics := (SELECT COUNT(*) FROM information_schema.COLUMNS
+                        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'user_ai_chat' AND COLUMN_NAME = 'input_len');
+SET @ddl_ai_metrics := IF(@has_ai_metrics = 0,
+                          'ALTER TABLE `user_ai_chat` ADD COLUMN `input_len` INT DEFAULT NULL COMMENT ''输入长度（字符数）'' AFTER `mark_type`, ADD COLUMN `output_len` INT DEFAULT NULL COMMENT ''输出长度（字符数）'' AFTER `input_len`, ADD COLUMN `duration_ms` BIGINT DEFAULT NULL COMMENT ''调用耗时（毫秒）'' AFTER `output_len`, ADD COLUMN `success` TINYINT DEFAULT NULL COMMENT ''是否成功：0-失败，1-成功'' AFTER `duration_ms`',
+                          'SELECT 1');
+PREPARE stmt_ai_metrics FROM @ddl_ai_metrics;
+EXECUTE stmt_ai_metrics;
+DEALLOCATE PREPARE stmt_ai_metrics;
+
+-- ============================================================================
+-- 32. food_shop 美食店铺表（供 AI 工具 recommendFood 查询）
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `food_shop` (
+    `id`          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `name`        VARCHAR(100) NOT NULL                COMMENT '店铺名称',
+    `city`        VARCHAR(50)           DEFAULT NULL   COMMENT '所属城市',
+    `taste`       VARCHAR(50)           DEFAULT NULL   COMMENT '口味 / 类型',
+    `address`     VARCHAR(255)          DEFAULT NULL   COMMENT '地址',
+    `price`       DECIMAL(10, 2)        DEFAULT NULL   COMMENT '人均价格（元）',
+    `rating`      DECIMAL(3, 1)         DEFAULT NULL   COMMENT '评分（0-5）',
+    `description` VARCHAR(255)          DEFAULT NULL   COMMENT '简介',
+    `create_time` DATETIME              DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT               DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    KEY `idx_city` (`city`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '美食店铺表';
+
+-- 33. 美食店铺示例数据（幂等：显式主键 + INSERT IGNORE）
+INSERT IGNORE INTO `food_shop` (`id`, `name`, `city`, `taste`, `address`, `price`, `rating`, `description`) VALUES
+(1,  '陈麻婆豆腐（青羊店）', '成都', '麻辣',   '成都市青羊区西玉龙街',        68.00, 4.7, '百年老字号，麻婆豆腐麻辣鲜香烫'),
+(2,  '小龙翻大江火锅',       '成都', '火锅',   '成都市锦江区春熙路',         128.00, 4.6, '成都人气火锅，锅底香浓、菜品新鲜'),
+(3,  '钟水饺（总府路店）',   '成都', '小吃',   '成都市锦江区总府路',          35.00, 4.5, '成都名小吃，红油水饺皮薄馅嫩'),
+(4,  '马旺子川小馆',         '成都', '川菜',   '成都市武侯区人民南路',        95.00, 4.8, '新派川菜，回锅肉与宫保鸡丁招牌'),
+(5,  '乐山鲜知味钵钵鸡',     '乐山', '小吃',   '乐山市市中区张公桥好吃街',     45.00, 4.7, '乐山钵钵鸡代表，藤椒与红油双味'),
+(6,  '甜皮鸭（赵鸭子）',     '乐山', '卤味',   '乐山市市中区嘉定中路',        40.00, 4.6, '外皮酥甜、肉质细嫩，乐山必吃'),
+(7,  '自贡盐帮菜·鲜味馆',   '自贡', '鲜辣',   '自贡市自流井区五星街',        88.00, 4.6, '盐帮菜代表，冷吃兔与水煮牛肉'),
+(8,  '宜宾燃面（老字号）',   '宜宾', '面食',   '宜宾市翠屏区西街',            28.00, 4.5, '宜宾燃面，油重无水、点火即燃'),
+(9,  '泸州老窖美酒美食坊',   '泸州', '酒文化', '泸州市江阳区三星街',         110.00, 4.5, '浓香型白酒搭配川南家常菜'),
+(10, '绵阳米粉（开元店）',   '绵阳', '小吃',   '绵阳市涪城区临园路',          22.00, 4.4, '绵阳米粉细滑入味，早餐首选'),
+(11, '南充川北凉粉',         '南充', '小吃',   '南充市顺庆区人民中路',        20.00, 4.5, '川北凉粉麻辣爽口，夏日必吃'),
+(12, '都江堰老腊肉馆',       '成都', '农家菜', '成都市都江堰市幸福路',        75.00, 4.6, '青城山老腊肉与山野菜，配青城茶');
+
+-- ============================================================================
+-- 34. user_profile 用户画像表（供 AI 助手注入个性化上下文）
+-- ============================================================================
+CREATE TABLE IF NOT EXISTS `user_profile` (
+    `id`          BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    `user_id`     BIGINT      NOT NULL                COMMENT '用户ID',
+    `age_range`   VARCHAR(20)          DEFAULT NULL   COMMENT '年龄段',
+    `gender`      VARCHAR(10)          DEFAULT NULL   COMMENT '性别',
+    `region`      VARCHAR(50)          DEFAULT NULL   COMMENT '常驻地域（市州）',
+    `interests`   VARCHAR(255)         DEFAULT NULL   COMMENT '兴趣偏好（逗号分隔）',
+    `companion`   VARCHAR(50)          DEFAULT NULL   COMMENT '同行类型',
+    `budget`      VARCHAR(50)          DEFAULT NULL   COMMENT '预算范围',
+    `create_time` DATETIME             DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` DATETIME             DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `deleted`     TINYINT              DEFAULT 0      COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_id` (`user_id`)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT = '用户画像表';
+
+-- 35. 用户画像示例数据（幂等：显式主键 + INSERT IGNORE）
+INSERT IGNORE INTO `user_profile` (`id`, `user_id`, `age_range`, `gender`, `region`, `interests`, `companion`, `budget`) VALUES
+(1, 1001, '26-35', '女', '成都', '自然风光,美食', '情侣', '3000-5000 元'),
+(2, 1002, '18-25', '男', '绵阳', '人文古迹,摄影', '朋友', '1000-3000 元'),
+(3, 1003, '36-45', '女', '乐山', '亲子,古镇',   '亲子', '5000-8000 元'),
+(4, 1004, '26-35', '男', '宜宾', '红色旅游,历史', '独自', '1000-3000 元'),
+(5, 1005, '46 岁以上', '女', '成都', '文化,养生', '父母', '3000-5000 元');

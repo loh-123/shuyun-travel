@@ -50,6 +50,18 @@
     local('LXGWWenKai-Regular');
 }
 
+// ---------- 品牌书法艺术字：华文行楷（书写体） ----------
+// 由 tools/subset-brand-font.py 子集化（仅品牌文案用字，约 27KB），
+// 产物：public/fonts/brand-xingkai.woff2。
+// 换字体：替换脚本里的 SRC_FONT 重跑，或直接替换下面的 url。
+@font-face {
+  font-family: 'ShuCalligraphy';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/brand-xingkai.woff2') format('woff2');
+}
+
 // ---------- 英文标题：Playfair Display ----------
 @font-face {
   font-family: 'Playfair Display';
@@ -74,6 +86,18 @@
   // url('/fonts/Inter-Variable.woff2') format('woff2-variations');
 }
 
+// ---------- 等宽：JetBrains Mono（数据可视化数字） ----------
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src:
+    local('JetBrains Mono'),
+    local('JetBrainsMono-Regular'),
+    local('JetBrains Mono NL');
+}
+
 // ============================================================
 // 字体栈变量（全局统一在这里定义）
 // ============================================================
@@ -81,3 +105,7 @@ $font-title: 'Source Han Serif SC', 'STZhongsong', 'Songti SC', 'SimSun', serif;
 $font-body: 'LXGW WenKai', 'STKaiti', 'Kaiti SC', 'SimSun', serif;
 $font-en: 'Playfair Display', 'Cormorant Garamond', 'Times New Roman', serif;
 $font-en-body: 'Inter', 'Manrope', 'Helvetica Neue', Arial, sans-serif;
+$font-mono: 'JetBrains Mono', 'SFMono-Regular', Consolas, 'Liberation Mono', 'Courier New', monospace;
+
+/** 品牌书法艺术字（金色立体标题专用，配合全局 .sy-brand-text 使用） */
+$font-calligraphy: 'ShuCalligraphy', 'STKaiti', 'LXGW WenKai', 'KaiTi', 'SimSun', serif;

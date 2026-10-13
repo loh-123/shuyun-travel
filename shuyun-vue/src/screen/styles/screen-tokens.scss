@@ -1,0 +1,50 @@
+// ============================================================
+// 数据大屏设计令牌（数字孪生 · 深色科技风）
+// 组件内用法：@use '@/screen/styles/screen-tokens' as *;
+// ============================================================
+
+// 颜色
+$screen-bg: #060e1a; // 极深背景
+$screen-panel: rgba(14, 42, 71, 0.6); // 半透明面板
+$screen-panel-solid: #0e2a47; // 面板实底
+$screen-border: rgba(212, 179, 116, 0.3); // 面板描边
+$screen-gold: #d4b374; // 金沙金
+$screen-cyan: #4ad8f0; // 数据科技蓝
+$screen-red: #7a1a22; // 蜀锦红
+$screen-green: #3a5a40; // 竹青
+
+$screen-text: #dce6f2; // 主文字
+$screen-text-muted: #7a9bbf; // 次要文字
+$screen-text-dim: #4d6a8c; // 更弱文字
+
+// 字体
+$screen-font-num: 'Georgia', 'Songti SC', serif;
+
+// 动效
+$screen-ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+// 层级
+$screen-z-content: 2;
+$screen-z-header: 10;
+
+// ------------------------------------------------------------
+// 可复用 mixin
+// ------------------------------------------------------------
+
+/// 面板容器：半透明底 + 金色描边 + 轻微内发光
+@mixin screen-panel-box {
+  position: relative;
+  border: 1px solid $screen-border;
+  border-radius: 6px;
+  background: $screen-panel;
+  backdrop-filter: blur(6px);
+  box-shadow:
+    inset 0 0 24px rgba(74, 216, 240, 0.06),
+    0 0 18px rgba(0, 0, 0, 0.35);
+}
+
+/// 金色发光文字
+@mixin screen-glow($color: $screen-gold, $blur: 16px) {
+  color: $color;
+  text-shadow: 0 0 $blur rgba(212, 179, 116, 0.75);
+}

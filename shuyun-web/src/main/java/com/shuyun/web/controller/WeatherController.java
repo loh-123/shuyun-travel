@@ -1,7 +1,7 @@
 package com.shuyun.web.controller;
 
 import com.shuyun.common.Result;
-import com.shuyun.web.service.WeatherService;
+import com.shuyun.service.WeatherService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

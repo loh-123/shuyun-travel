@@ -3,8 +3,11 @@ package com.shuyun.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.shuyun.mapper.UserAiChatMapper;
+import com.shuyun.mapper.UserProfileMapper;
 import com.shuyun.pojo.entity.UserAiChat;
+import com.shuyun.pojo.entity.UserProfile;
 import com.shuyun.service.AiChatService;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -23,6 +26,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class AiChatServiceImpl extends ServiceImpl<UserAiChatMapper, UserAiChat> implements AiChatService {
 
     /** 角色：用户 */
@@ -33,6 +37,9 @@ public class AiChatServiceImpl extends ServiceImpl<UserAiChatMapper, UserAiChat>
 
     /** 会话标题最大长度 */
     private static final int TITLE_MAX = 18;
+
+    /** 用户画像 Mapper（读取 user_profile 表） */
+    private final UserProfileMapper userProfileMapper;
 
     @Override
     public String chat(Long userId, String message, String sessionId) {
@@ -103,15 +110,72 @@ public class AiChatServiceImpl extends ServiceImpl<UserAiChatMapper, UserAiChat>
     }
 
     /**
+     * 查询当前用户的 AI 画像（供对话页「记忆体」面板展示）
+     */
+    @Override
+    public Map<String, Object> profile(Long userId) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        if (userId == null) {
+            return data;
+        }
+        UserProfile profile = userProfileMapper.selectOne(Wrappers.<UserProfile>lambdaQuery()
+                .eq(UserProfile::getUserId, userId)
+                .eq(UserProfile::getDeleted, 0)
+                .last("limit 1"));
+        if (profile == null) {
+            return data;
+        }
+        if (profile.getInterests() != null) {
+            data.put("interests", profile.getInterests());
+        }
+        if (profile.getCompanion() != null) {
+            data.put("companion", profile.getCompanion());
+        }
+        if (profile.getBudget() != null) {
+            data.put("budget", profile.getBudget());
+        }
+        if (profile.getRegion() != null) {
+            data.put("region", profile.getRegion());
+        }
+        if (profile.getAgeRange() != null) {
+            data.put("ageRange", profile.getAgeRange());
+        }
+        if (profile.getGender() != null) {
+            data.put("gender", profile.getGender());
+        }
+        return data;
+    }
+
+    /**
      * 保存一条对话记录
      */
-    private void saveMessage(Long userId, String sessionId, String role, String content) {
+    @Override
+    public void saveMessage(Long userId, String sessionId, String role, String content) {
         UserAiChat chat = new UserAiChat();
         chat.setUserId(userId);
         chat.setSessionId(sessionId);
         chat.setRole(role);
         chat.setContent(content);
         chat.setTokens(0);
+        save(chat);
+    }
+
+    /**
+     * 保存 AI 回复并记录调用指标
+     */
+    @Override
+    public void saveAiReply(Long userId, String sessionId, String content, Integer tokens,
+                            Integer inputLen, Integer outputLen, Long durationMs, boolean success) {
+        UserAiChat chat = new UserAiChat();
+        chat.setUserId(userId);
+        chat.setSessionId(sessionId);
+        chat.setRole(ROLE_ASSISTANT);
+        chat.setContent(content);
+        chat.setTokens(tokens == null ? 0 : tokens);
+        chat.setInputLen(inputLen);
+        chat.setOutputLen(outputLen);
+        chat.setDurationMs(durationMs);
+        chat.setSuccess(success ? 1 : 0);
         save(chat);
     }
 

@@ -10,37 +10,52 @@
 // ------------------------------------------------------------
 // 1. 颜色
 // ------------------------------------------------------------
-$color-primary: #8c1f28; // 蜀锦红
-$color-ink: #0e2a47; // 青城墨蓝
-$color-gold: #c9a86a; // 金沙金
-$color-paper: #e8e3d8; // 宣纸米
+// 说明：$color-ink / $color-paper / $color-text-dark 改为引用 CSS 变量，
+// 这样「白天 / 夜间」主题切换（见 global.scss 的 --sy-* 令牌）可以一处生效、
+// 全站所有引用这些令牌的页面自动跟随，无需逐个页面改动。
+// 注意：这三个令牌不得再参与 SCSS 颜色函数（color.mix / rgba 等），
+// 目前全项目也未如此使用，仅作为纯色值输出。
+// 页面内常见的 rgba(var(--sy-*-rgb), α) 亦随主题切换（见 global.scss）。
+$color-primary: #7a1a22; // 蜀锦红
+$color-ink: var(--sy-ink); // 青城墨蓝（随主题）
+$color-gold: #d4b374; // 金沙金
+$color-paper: var(--sy-paper); // 宣纸米（随主题）
 $color-bamboo: #3a5a40; // 竹青
 $color-text-light: #f5f1e8; // 亮色文字（深底上用）
-$color-text-dark: #1a1a1a; // 暗色文字（浅底上用，不用纯黑）
+$color-text-dark: var(--sy-text-dark); // 暗色文字（浅底上用，随主题）
 $color-white: #fff;
 
 // 派生：遮罩 / 半透明 / 描边
 $color-overlay-strong: rgba(14, 42, 71, 0.75);
 $color-overlay-soft: rgba(14, 42, 71, 0.35);
 $color-scrim: rgba(20, 16, 14, 0.45);
-$color-gold-soft: rgba(201, 168, 106, 0.15);
-$color-gold-line: rgba(201, 168, 106, 0.55);
-$color-border-gold: rgba(201, 168, 106, 0.42); // 面板标准描边
-$color-border-gold-light: rgba(201, 168, 106, 0.3);
-$color-primary-soft: rgba(140, 31, 40, 0.08);
-$color-paper-glass: rgba(232, 227, 216, 0.72);
-$color-glass: rgba(255, 255, 255, 0.62); // 面板毛玻璃底色
+$color-gold-soft: rgba(212, 179, 116, 0.15);
+$color-gold-line: rgba(212, 179, 116, 0.55);
+$color-border-gold: rgba(212, 179, 116, 0.42); // 面板标准描边
+$color-border-gold-light: rgba(212, 179, 116, 0.3);
+$color-primary-soft: rgba(122, 26, 34, 0.08);
+$color-paper-glass: rgba(var(--sy-paper-rgb), 0.72); // 宣纸毛玻璃（随主题）
+$color-glass: rgba(var(--sy-surface-rgb), 0.62); // 面板毛玻璃底色（随主题）
+$color-shuxiu: #f7f3ea; // 蜀绣缎底（首页热门景点 / 八大文化屏）
 
 // ------------------------------------------------------------
 // 2. 字体（字号全部用 clamp 做流体排版）
 // ------------------------------------------------------------
-$fs-hero: clamp(72px, 10vw, 200px); // 首屏主标题
-$fs-h1: clamp(36px, 5vw, 80px); // 页面 / 区块大标题
-$fs-h2: clamp(26px, 3vw, 44px); // 二级标题
-$fs-h3: clamp(20px, 2.2vw, 34px); // 三级标题
-$fs-body: clamp(15px, 1.2vw, 20px); // 正文
-$fs-small: clamp(12px, 0.9vw, 15px); // 辅助文字
-// 补充令牌
+$hero-list-height: 50vh; // 列表页 Hero 统一高度
+$hero-detail-height: 60vh; // 详情页 Hero 统一高度
+$fs-display: clamp(64px, 8vw, 140px); // 首屏巨型标题
+$fs-hero-xl: clamp(96px, 8vw, 140px); // 页面 Hero 主标题（大字标准，≥ 96px）
+$fs-hero: clamp(48px, 6vw, 96px); // 页面主标题
+$fs-h1: clamp(36px, 4vw, 64px); // 章节主标题
+$fs-h2: clamp(28px, 3vw, 44px); // 章节副标题 / 卡片大标题
+$fs-h3: clamp(22px, 2vw, 32px); // 卡片标题
+$fs-h4: clamp(18px, 1.5vw, 24px); // 小标题
+$fs-body-lg: clamp(17px, 1.2vw, 22px); // 正文（详细介绍、简介）
+$fs-body: clamp(15px, 1vw, 18px); // 常规正文
+$fs-caption: clamp(13px, 0.9vw, 16px); // 卡片小字、说明文字
+$fs-tiny: clamp(12px, 0.8vw, 14px); // 标签、时间戳
+// 兼容旧令牌（等价映射，避免改动大量既有引用）
+$fs-small: $fs-caption; // 旧：辅助文字
 $fs-num: clamp(40px, 6vw, 96px); // 数据概览数字
 $fs-eyebrow: clamp(12px, 1vw, 16px); // 英文小标签
 
@@ -55,6 +70,9 @@ $space-xl: clamp(48px, 6vw, 120px);
 $space-xxl: clamp(64px, 8vw, 160px);
 $gutter: clamp(24px, 5vw, 120px); // 内容区左右留白
 
+/** 顶部导航栏高度（玉璧团章徽标 144px，留出上下呼吸空间：小屏 104px，桌面最高 176px） */
+$nav-height: clamp(104px, 13vw, 176px);
+
 // ------------------------------------------------------------
 // 4. 圆角
 // ------------------------------------------------------------
@@ -66,10 +84,10 @@ $radius-pill: 999px;
 // ------------------------------------------------------------
 // 5. 阴影
 // ------------------------------------------------------------
-$shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.08);
-$shadow-md: 0 8px 20px rgba(0, 0, 0, 0.1);
-$shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.2);
-$shadow-seal: 0 6px 24px rgba(140, 31, 40, 0.32); // 印章 / 品牌红投影
+$shadow-sm: 0 4px 12px rgba(14, 42, 71, 0.06);
+$shadow-md: 0 12px 32px rgba(14, 42, 71, 0.08);
+$shadow-lg: 0 24px 48px rgba(14, 42, 71, 0.16);
+$shadow-seal: 0 6px 24px rgba(122, 26, 34, 0.32); // 印章 / 品牌红投影
 $shadow-text: 0 2px 24px rgba(0, 0, 0, 0.5); // 深底文字可读性
 $shadow-text-soft: 0 1px 12px rgba(0, 0, 0, 0.35);
 
@@ -90,6 +108,9 @@ $pattern-brocade:
   repeating-linear-gradient(-45deg, #{$color-gold} 0 1px, transparent 1px 14px);
 
 $pattern-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+
+// 蜀绣花纹淡雅底纹（白缎底上用：牡丹/芙蓉 + 叶片 + 花蕾 + 蝴蝶，柔粉/青绿 + 金线，300px 无缝拼接）
+$pattern-shuxiu: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300' viewBox='0 0 300 300'%3E%3Cg fill='none' stroke='%238aa584' stroke-width='2' stroke-linecap='round' opacity='0.75'%3E%3Cpath d='M110 150C130 170 150 200 190 214'/%3E%3Cpath d='M110 150C96 120 92 96 108 70'/%3E%3Cpath d='M110 150C140 140 170 150 196 176'/%3E%3C/g%3E%3Cg fill='%23a9c1a2' stroke='%237f9d7a' stroke-width='1' opacity='0.7'%3E%3Cpath transform='rotate(-28 152 200)' d='M152 200C138 196 124 188 118 176C132 174 148 182 152 200Z'/%3E%3Cpath transform='rotate(24 150 196)' d='M150 196C160 184 168 168 162 154C148 160 142 178 150 196Z'/%3E%3Cpath transform='rotate(200 100 96)' d='M100 96C88 88 80 74 82 60C96 64 104 78 100 96Z'/%3E%3C/g%3E%3Cg transform='translate(110 150)'%3E%3Cg fill='%23eaa7ad' stroke='%23d98a92' stroke-width='1.2' opacity='0.82'%3E%3Cpath transform='rotate(0)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(60)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(120)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(180)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(240)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(300)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3C/g%3E%3Cg fill='%23f6cdd1' stroke='%23e3a3a9' stroke-width='1' opacity='0.9'%3E%3Cpath transform='rotate(30) scale(0.62)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(90) scale(0.62)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(150) scale(0.62)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(210) scale(0.62)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(270) scale(0.62)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3Cpath transform='rotate(330) scale(0.62)' d='M0 0C-18 -26 -18 -54 0 -66C18 -54 18 -26 0 0Z'/%3E%3C/g%3E%3Ccircle r='11' fill='%23f0d79a' stroke='%23c9a86a' stroke-width='1.2' opacity='0.95'/%3E%3Cg fill='%23c9a86a' opacity='0.9'%3E%3Ccircle cx='6' cy='-2' r='1.8'/%3E%3Ccircle cx='-5' cy='3' r='1.8'/%3E%3Ccircle cx='2' cy='6' r='1.8'/%3E%3Ccircle cx='-3' cy='-5' r='1.8'/%3E%3C/g%3E%3C/g%3E%3Cg transform='translate(232 210)'%3E%3Cpath d='M0 0C-8 -14 -6 -30 4 -38C12 -28 12 -12 0 0Z' fill='%23eaa7ad' stroke='%23d98a92' stroke-width='1.1' opacity='0.8'/%3E%3Cpath d='M4 -30C12 -32 18 -28 20 -20C12 -18 6 -22 4 -30Z' fill='%23a9c1a2' stroke='%237f9d7a' stroke-width='1' opacity='0.75'/%3E%3C/g%3E%3Cg transform='translate(214 96)'%3E%3Cg fill='%23b6c6de' stroke='%238397ba' stroke-width='1.1' opacity='0.85'%3E%3Cpath d='M0 0C-20 -14 -34 -30 -22 -41C-10 -49 0 -28 0 0Z'/%3E%3Cpath d='M0 0C20 -14 34 -30 22 -41C10 -49 0 -28 0 0Z'/%3E%3Cpath d='M0 0C-14 11 -22 25 -14 31C-6 35 0 18 0 0Z'/%3E%3Cpath d='M0 0C14 11 22 25 14 31C6 35 0 18 0 0Z'/%3E%3C/g%3E%3Cellipse rx='2.4' ry='12' fill='%23c9a86a' opacity='0.9'/%3E%3Cg fill='none' stroke='%23c9a86a' stroke-width='1' opacity='0.85'%3E%3Cpath d='M1 -11C5 -18 9 -20 12 -25'/%3E%3Cpath d='M-1 -11C-5 -18 -9 -20 -12 -25'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 
 // ------------------------------------------------------------
 // 9. 层级

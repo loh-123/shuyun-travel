@@ -30,12 +30,12 @@ public class AuthController {
     /**
      * 用户注册
      *
-     * @param body 请求体：{username, email, password}
+     * @param body 请求体：{username, email, password, code}
      * @return 统一结果
      */
     @PostMapping("/register")
     public Result<Void> register(@RequestBody Map<String, String> body) {
-        userService.register(body.get("username"), body.get("email"), body.get("password"));
+        userService.register(body.get("username"), body.get("email"), body.get("password"), body.get("code"));
         return Result.ok();
     }
 

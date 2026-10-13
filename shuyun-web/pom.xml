@@ -47,6 +47,12 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- WebSocket（数据大屏实时推送 /ws/screen） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+
         <!-- Knife4j -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
@@ -60,5 +66,15 @@
             <optional>true</optional>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <!-- 打成可直接 java -jar 运行的可执行 jar（含全部依赖），供 Docker / 服务器部署 -->
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

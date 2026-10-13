@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -46,7 +47,19 @@ public class Culture implements Serializable {
     @TableField("content")
     private String content;
 
-    /** 关联景点ID（逗号分隔） */
+    /** 简介网址（百度百科等） */
+    @TableField("website")
+    private String website;
+
+    /** 关联景点（逗号分隔的景点名称，来自 Excel 采集） */
+    @TableField("related_scenic")
+    private String relatedScenic;
+
+    /** 相关人物（逗号分隔，来自 Excel 采集） */
+    @TableField("related_person")
+    private String relatedPerson;
+
+    /** 关联景点ID（逗号分隔，后台维护） */
     @TableField("related_scenic_ids")
     private String relatedScenicIds;
 
@@ -62,11 +75,17 @@ public class Culture implements Serializable {
     @TableField("tags")
     private String tags;
 
+    /** 浏览次数（人气） */
+    @TableField("view_count")
+    private Integer viewCount;
+
     /** 创建时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("create_time")
     private LocalDateTime createTime;
 
     /** 更新时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("update_time")
     private LocalDateTime updateTime;
 

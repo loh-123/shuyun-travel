@@ -56,6 +56,14 @@ public class UserNote implements Serializable {
     @TableField("tags")
     private String tags;
 
+    /** 审核状态：0-待审核，1-已通过，2-已拒绝 */
+    @TableField("audit_status")
+    private Integer auditStatus;
+
+    /** 拒绝理由（审核不通过时填写） */
+    @TableField("reject_reason")
+    private String rejectReason;
+
     /** 创建时间 */
     @TableField("create_time")
     private LocalDateTime createTime;

@@ -30,6 +30,12 @@ useCountUp(stats, { trigger: statsEl, duration: 2 })
 <template>
   <div ref="rootEl" class="data">
     <div class="sy-container data__inner">
+      <!-- 顶部小标题：蜀韵管家的知识底座 -->
+      <div class="data__kb data__animate">
+        <h3 class="data__kb-title">蜀韵管家的知识底座</h3>
+        <p class="data__kb-sub">374 条结构化数据 · 覆盖 21 市州</p>
+      </div>
+
       <SectionTitle
         eyebrow="Data Overview"
         variant="on-dark"
@@ -73,6 +79,30 @@ useCountUp(stats, { trigger: statsEl, duration: 2 })
   padding-block: clamp(48px, 10vh, 140px);
 }
 
+/* ---------------- 顶部小标题：知识底座 ---------------- */
+.data__kb {
+  margin-bottom: clamp(18px, 3vh, 36px);
+}
+
+.data__kb-title {
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: 28px;
+  line-height: 1.3;
+  letter-spacing: 0.08em;
+  color: $color-text-light;
+  text-shadow: $shadow-text;
+}
+
+.data__kb-sub {
+  margin-top: 10px;
+  font-family: $font-body;
+  font-size: 16px;
+  letter-spacing: 0.06em;
+  color: rgba(245, 241, 232, 0.62);
+  text-shadow: $shadow-text-soft;
+}
+
 /* ---------------- 数据 ---------------- */
 .data__stats {
   display: grid;
@@ -93,7 +123,7 @@ useCountUp(stats, { trigger: statsEl, duration: 2 })
     left: 0;
     width: 1px;
     height: calc(100% - 12px);
-    background: linear-gradient(180deg, $color-gold 0%, rgba(201, 168, 106, 0) 100%);
+    background: linear-gradient(180deg, $color-gold 0%, rgba(212, 179, 116, 0) 100%);
   }
 }
 

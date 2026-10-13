@@ -62,6 +62,10 @@ public class User implements Serializable {
     @TableField("update_time")
     private LocalDateTime updateTime;
 
+    /** 最后登录时间 */
+    @TableField("last_login_time")
+    private LocalDateTime lastLoginTime;
+
     /** 逻辑删除：0-未删除，1-已删除 */
     @TableField("deleted")
     private Integer deleted;

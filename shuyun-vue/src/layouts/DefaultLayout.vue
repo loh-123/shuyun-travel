@@ -20,28 +20,71 @@ import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { getLenis } from '@/composables/useLenis'
 import { locale, setLocale, t, type Locale } from '@/i18n'
+import { useTheme } from '@/composables/useTheme'
+import BrandLogo from '@/components/common/BrandLogo.vue'
+import AiFab from '@/components/common/AiFab.vue'
 
 gsap.registerPlugin(ScrollTrigger)
 
 /* ------------------------------------------------------------
  * 常量
  * ---------------------------------------------------------- */
-/** 主导航（label 存 i18n 的 key，模板里用 t() 取词） */
+/**
+ * 主导航尾部项（首页与「蜀地风物」Mega Menu 入口在模板中单独渲染）
+ * label 存 i18n 的 key，模板里用 t() 取词
+ */
 const MENUS = [
-  { label: 'nav.home', path: '/' },
-  { label: 'nav.scenic', path: '/scenic' },
-  { label: 'nav.culture', path: '/culture' },
+  { label: 'nav.map3d', path: '/map3d' },
   { label: 'nav.assistant', path: '/assistant' },
 ]
 
+/** 「蜀地风物」全屏 Mega Menu 的四张卡片 */
+const MEGA_CARDS = [
+  {
+    labelKey: 'nav.scenic',
+    sloganKey: 'mega.sloganScenic',
+    path: '/scenic',
+    image: '/images/scenic/jiuzhaigoufengjingmingshengqu/jiuzhaigoufengjingmingshengqu_cover.jpg',
+    count: 100,
+    unit: '处',
+  },
+  {
+    labelKey: 'nav.food',
+    sloganKey: 'mega.sloganFood',
+    path: '/food',
+    image: '/images/food/mapodoufu/mapodoufu_dish.jpg',
+    count: 100,
+    unit: '道',
+  },
+  {
+    labelKey: 'nav.culture',
+    sloganKey: 'mega.sloganCulture',
+    path: '/culture',
+    image: '/images/culture/chuanju/chuanju_cover.jpg',
+    count: 50,
+    unit: '项',
+  },
+  {
+    labelKey: 'nav.heritage',
+    sloganKey: 'mega.sloganHeritage',
+    path: '/heritage',
+    image: '/images/heritage/shujinzhizaojiyi/shujinzhizaojiyi_1.jpg',
+    count: 100,
+    unit: '项',
+  },
+]
+
 /** 有整屏 Hero 的路由前缀（导航栏在这些页面顶部透明悬浮） */
-const HERO_PREFIXES = ['/scenic', '/culture', '/profile']
+const HERO_PREFIXES = ['/scenic', '/culture', '/food', '/heritage', '/person', '/profile']
 
 /** 快速导航 */
 const QUICK_LINKS = [
   { label: 'nav.home', path: '/' },
   { label: 'nav.scenic', path: '/scenic' },
+  { label: 'nav.food', path: '/food' },
   { label: 'nav.culture', path: '/culture' },
+  { label: 'nav.heritage', path: '/heritage' },
+  { label: 'nav.map3d', path: '/map3d' },
   { label: 'nav.assistant', path: '/assistant' },
   { label: 'nav.profile', path: '/profile' },
 ]
@@ -85,6 +128,9 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 
+/** 主题（白天 / 夜间），切换按钮位于语言切换右侧 */
+const { themeMode, toggleTheme } = useTheme()
+
 /** 滚动超过 100px */
 const scrolled = ref(false)
 /** 滚动超过 500px（显示回到顶部） */
@@ -94,6 +140,18 @@ const drawerOpen = ref(false)
 const searchOpen = ref(false)
 const userMenuOpen = ref(false)
 const langMenuOpen = ref(false)
+
+/** 蜀地风物 Mega Menu 展开状态 */
+const megaOpen = ref(false)
+/** Mega Menu 悬停计时器 */
+let megaTimer: number | undefined
+
+/** 是否管理员（决定「后台管理」入口指向） */
+const isAdmin = computed(() => userStore.user?.role === 'ADMIN')
+/** 问候语：你好，<账号名> */
+const greeting = computed(() => `${t('nav.greeting')}${userStore.user?.username ?? ''}`)
+/** 头像悬停收起计时器 */
+let userMenuTimer: number | undefined
 
 /** 搜索 */
 interface SearchCity {
@@ -152,9 +210,11 @@ const hasHero = computed(() => {
 /** 是否使用磨砂玻璃（滚动过 或 该页没有 Hero） */
 const solid = computed(() => scrolled.value || !hasHero.value)
 
-/** 用户头像（没有就用首字母） */
+/** AI 管家页隐藏左上角品牌 LOGO（避免遮挡页面文字） */
+const hideNavLogo = computed(() => route.path.startsWith('/assistant'))
+
+/** 用户头像：仅取后端返回的自定义头像；未设置时以「人形」线性图标占位（不再使用 DiceBear 卡通图） */
 const avatarUrl = computed(() => userStore.user?.avatar || '')
-const initial = computed(() => userStore.user?.username?.charAt(0)?.toUpperCase() || '蜀')
 
 /** 拍平候选结果，供 ↑↓ 选择 / Enter 打开 */
 const flatResults = computed(() => [
@@ -196,14 +256,84 @@ function go(path: string) {
   searchOpen.value = false
   userMenuOpen.value = false
   langMenuOpen.value = false
+  window.clearTimeout(megaTimer)
+  megaOpen.value = false
   if (route.fullPath !== path) {
     router.push(path)
   }
 }
 
-/** 个人中心内部面板（我的行程 / 我的收藏…）通过 query 指定 */
-function goProfile(tab: string) {
-  go(`/profile?tab=${tab}`)
+/* ---------------- 蜀地风物 Mega Menu ---------------- */
+/** 当前路由是否属于 Mega Menu 四个栏目之一（用于入口高亮） */
+const megaActive = computed(() => MEGA_CARDS.some((c) => isActive(c.path)))
+
+/** 悬停进入：0.15s 后展开 */
+function onMegaEnter() {
+  window.clearTimeout(megaTimer)
+  megaTimer = window.setTimeout(() => {
+    megaOpen.value = true
+  }, 150)
+}
+
+/** 悬停离开：0.3s 后收起 */
+function onMegaLeave() {
+  window.clearTimeout(megaTimer)
+  megaTimer = window.setTimeout(() => {
+    megaOpen.value = false
+  }, 300)
+}
+
+/** 点击菜单文字：手动展开 / 收起 */
+function toggleMega() {
+  window.clearTimeout(megaTimer)
+  megaOpen.value = !megaOpen.value
+}
+
+/** 小屏抽屉里点击「蜀地风物」：关抽屉 + 展开面板 */
+function openMegaFromDrawer() {
+  window.clearTimeout(megaTimer)
+  drawerOpen.value = false
+  megaOpen.value = true
+}
+
+/** 点击卡片：收起面板并跳转 */
+function goMega(path: string) {
+  window.clearTimeout(megaTimer)
+  megaOpen.value = false
+  go(path)
+}
+
+/** 点击头像：已登录进入个人中心，未登录跳转登录页 */
+function onUserClick() {
+  go(userStore.isLogin ? '/profile' : '/login')
+}
+
+/** 鼠标进入头像区域：已登录则展开下拉 */
+function onUserEnter() {
+  window.clearTimeout(userMenuTimer)
+  if (userStore.isLogin) {
+    userMenuOpen.value = true
+  }
+}
+
+/** 鼠标离开头像区域：延迟收起，便于移动到菜单项 */
+function onUserLeave() {
+  window.clearTimeout(userMenuTimer)
+  userMenuTimer = window.setTimeout(() => {
+    userMenuOpen.value = false
+  }, 180)
+}
+
+/** 「后台管理」：管理员进入管理后台，普通用户进入用户后台 */
+function goConsole() {
+  userMenuOpen.value = false
+  router.push(isAdmin.value ? '/admin/dashboard' : '/user/overview')
+}
+
+/** 账号设置：跳用户后台设置页 */
+function goAccountSettings() {
+  userMenuOpen.value = false
+  router.push('/user/settings')
 }
 
 function openSearch() {
@@ -348,6 +478,11 @@ function onDocClick(e: MouseEvent) {
   if (!el.closest('.nav-lang')) {
     langMenuOpen.value = false
   }
+  // 点击 Mega Menu / 入口 / 小屏抽屉以外的区域 → 收起面板
+  if (!el.closest('.nav-mega') && !el.closest('.mega') && !el.closest('.drawer')) {
+    window.clearTimeout(megaTimer)
+    megaOpen.value = false
+  }
 }
 
 /** 键盘：Esc 关闭浮层 */
@@ -357,6 +492,8 @@ function onKeydown(e: KeyboardEvent) {
     drawerOpen.value = false
     userMenuOpen.value = false
     langMenuOpen.value = false
+    window.clearTimeout(megaTimer)
+    megaOpen.value = false
   }
 }
 
@@ -397,17 +534,19 @@ onMounted(() => {
 
   onScroll()
 
-  // 页脚四栏从左到右依次淡入
-  ctx = gsap.context(() => {
-    gsap.from('.footer__col', {
-      y: 40,
-      opacity: 0,
-      duration: 0.8,
-      stagger: 0.12,
-      ease: 'power3.out',
-      scrollTrigger: { trigger: '.footer', start: 'top 88%', once: true },
+  // 页脚四栏从左到右依次淡入（对话页隐藏页脚时跳过，避免空选择器告警）
+  if (!route.meta.hideFooter) {
+    ctx = gsap.context(() => {
+      gsap.from('.footer__col', {
+        y: 40,
+        opacity: 0,
+        duration: 0.8,
+        stagger: 0.12,
+        ease: 'power3.out',
+        scrollTrigger: { trigger: '.footer', start: 'top 88%', once: true },
+      })
     })
-  })
+  }
   ScrollTrigger.refresh()
 })
 
@@ -416,6 +555,8 @@ onUnmounted(() => {
   document.removeEventListener('click', onDocClick)
   document.removeEventListener('keydown', onKeydown)
   window.clearTimeout(searchTimer)
+  window.clearTimeout(userMenuTimer)
+  window.clearTimeout(megaTimer)
   ctx?.revert()
   ctx = null
 })
@@ -428,23 +569,46 @@ watch(
     searchOpen.value = false
     userMenuOpen.value = false
     langMenuOpen.value = false
+    window.clearTimeout(megaTimer)
+    megaOpen.value = false
   },
 )
 </script>
 
 <template>
-  <div class="layout">
+  <div class="layout" :class="{ 'is-user-menu-open': userMenuOpen }">
     <!-- ================= 导航栏 ================= -->
     <header class="nav" :class="{ 'is-solid': solid }">
       <div class="nav__inner">
-        <!-- Logo：篆刻印章 + 品牌名 -->
-        <div class="nav__logo" @click="go('/')">
-          <span class="nav__seal">蜀</span>
-          <span class="nav__brand">{{ t('app.name') }}</span>
+        <!-- Logo：太阳神鸟徽标，点击回首页（AI 管家页隐藏，避免遮挡文字） -->
+        <div v-if="!hideNavLogo" class="nav__logo" @click="go('/')">
+          <BrandLogo :size="144" tooltip clickable />
         </div>
 
-        <!-- 主导航 -->
+        <!-- 主导航：首页 | 蜀地风物(Mega Menu) | 3D数据大屏 | AI管家 -->
         <nav class="nav__menu">
+          <a class="nav__item" :class="{ 'is-active': isActive('/') }" @click="go('/')">
+            <span class="nav__item-text">{{ t('nav.home') }}</span>
+            <span class="nav__item-line" aria-hidden="true" />
+            <span class="nav__item-dot" aria-hidden="true" />
+          </a>
+
+          <button
+            type="button"
+            class="nav__item nav-mega"
+            :class="{ 'is-active': megaOpen || megaActive }"
+            @mouseenter="onMegaEnter"
+            @mouseleave="onMegaLeave"
+            @click="toggleMega"
+          >
+            <span class="nav__item-text">{{ t('nav.folk') }}</span>
+            <svg class="nav-mega__caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+            <span class="nav__item-line" aria-hidden="true" />
+            <span class="nav__item-dot" aria-hidden="true" />
+          </button>
+
           <a
             v-for="m in MENUS"
             :key="m.path"
@@ -462,7 +626,7 @@ watch(
         <div class="nav__actions">
           <!-- 搜索 -->
           <button type="button" class="nav__icon" :title="t('nav.searchTitle')" @click="openSearch">
-            <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
               <circle cx="11" cy="11" r="6" />
               <path d="M20 20l-4.3-4.3" />
             </svg>
@@ -477,7 +641,7 @@ watch(
               @click.stop="langMenuOpen = !langMenuOpen"
             >
               <span class="nav-lang__text">{{ locale === 'zh' ? '中' : 'EN' }}</span>
-              <svg class="nav-lang__caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+              <svg class="nav-lang__caret" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
             </button>
@@ -493,33 +657,58 @@ watch(
             </transition>
           </div>
 
-          <!-- 用户 -->
-          <div v-if="userStore.isLogin" class="nav-user">
-            <button type="button" class="nav-user__btn" :title="t('nav.accountTitle')" @click.stop="userMenuOpen = !userMenuOpen">
+          <!-- 主题切换：白天 / 夜间（位于语言切换右侧） -->
+          <button
+            type="button"
+            class="nav__icon nav-theme"
+            :title="`${t('nav.themeTitle')}：${themeMode === 'night' ? t('nav.themeNight') : t('nav.themeDay')}`"
+            @click="toggleTheme"
+          >
+            <svg v-if="themeMode === 'night'" viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+            </svg>
+            <svg v-else viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="4.6" />
+              <path d="M12 1.8v3M12 19.2v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M1.8 12h3M19.2 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+            </svg>
+          </button>
+
+          <!-- 用户：登录/注册融合入口 + 已登录悬停下拉 -->
+          <div class="nav-user" @mouseenter="onUserEnter" @mouseleave="onUserLeave">
+            <button
+              type="button"
+              class="nav-user__btn"
+              :title="userStore.isLogin ? greeting : t('nav.register')"
+              @click="onUserClick"
+            >
               <img v-if="avatarUrl" class="nav-user__avatar" :src="avatarUrl" alt="" />
-              <span v-else class="nav-user__avatar nav-user__avatar--text">{{ initial }}</span>
+              <span v-else class="nav-user__avatar nav-user__avatar--ghost">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="8" r="4" />
+                  <path d="M4 21a8 8 0 0 1 16 0" />
+                </svg>
+              </span>
+              <span v-if="userStore.isLogin" class="nav-user__hello">{{ greeting }}</span>
             </button>
 
             <transition name="nav-drop">
-              <div v-if="userMenuOpen" class="nav-drop nav-user__menu">
+              <div v-if="userStore.isLogin && userMenuOpen" class="nav-drop nav-user__menu">
                 <div class="nav-drop__head">
                   <img v-if="avatarUrl" class="nav-drop__avatar" :src="avatarUrl" alt="" />
-                  <span v-else class="nav-drop__avatar nav-drop__avatar--text">{{ initial }}</span>
+                  <span v-else class="nav-drop__avatar nav-drop__avatar--ghost"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg></span>
                   <span class="nav-drop__meta">
-                    <b>{{ userStore.user?.username }}</b>
+                    <b>{{ greeting }}</b>
                     <em>{{ userStore.user?.email }}</em>
                   </span>
                 </div>
+                <button type="button" @click="goConsole">{{ t('nav.admin') }}</button>
                 <button type="button" @click="go('/profile')">{{ t('nav.profile') }}</button>
-                <button type="button" @click="goProfile('trips')">{{ t('nav.trips') }}</button>
-                <button type="button" @click="goProfile('collection')">{{ t('nav.collection') }}</button>
+                <button type="button" @click="goAccountSettings">{{ t('nav.accountSettings') }}</button>
                 <span class="nav-drop__sep" />
                 <button type="button" class="is-danger" @click="logout">{{ t('nav.logout') }}</button>
               </div>
             </transition>
           </div>
-
-          <button v-else type="button" class="nav__login" @click="go('/login')">{{ t('nav.login') }}</button>
 
           <!-- 汉堡按钮（小屏） -->
           <button type="button" class="nav__burger" :title="t('nav.menuTitle')" @click="drawerOpen = true">
@@ -534,21 +723,61 @@ watch(
       <span class="nav__line" aria-hidden="true" />
     </header>
 
+    <!-- ================= 蜀地风物 · 全屏 Mega Menu ================= -->
+    <transition name="mega">
+      <section
+        v-if="megaOpen"
+        class="mega"
+        aria-label="蜀地风物"
+        @mouseenter="onMegaEnter"
+        @mouseleave="onMegaLeave"
+      >
+        <div class="mega__inner">
+          <header class="mega__head">
+            <h2 class="mega__title">{{ t('nav.folk') }}</h2>
+            <p class="mega__sub">{{ t('mega.sub') }}</p>
+          </header>
+
+          <div class="mega__grid">
+            <button
+              v-for="c in MEGA_CARDS"
+              :key="c.path"
+              type="button"
+              class="mega-card"
+              @click="goMega(c.path)"
+            >
+              <span class="mega-card__media">
+                <img class="mega-card__img" :src="c.image" :alt="t(c.labelKey)" loading="lazy" decoding="async" />
+              </span>
+              <span class="mega-card__body">
+                <span class="mega-card__top">
+                  <span class="mega-card__name">{{ t(c.labelKey) }}</span>
+                  <span class="mega-card__arrow" aria-hidden="true">→</span>
+                </span>
+                <span class="mega-card__count">{{ c.count }} {{ c.unit }}</span>
+                <span class="mega-card__slogan">{{ t(c.sloganKey) }}</span>
+              </span>
+            </button>
+          </div>
+        </div>
+      </section>
+    </transition>
+
     <!-- ================= 内容 ================= -->
     <main class="layout__main" :class="{ 'is-flat': !hasHero }">
       <slot />
     </main>
 
-    <!-- ================= 页脚 ================= -->
-    <footer class="footer">
+    <!-- ================= 页脚（对话页 /assistant 隐藏，见路由 meta.hideFooter） ================= -->
+    <footer v-if="!route.meta.hideFooter" class="footer">
       <span class="footer__line" aria-hidden="true" />
 
       <div class="sy-container footer__inner">
         <!-- 1. 品牌 -->
         <div class="footer__col footer__col--brand">
           <div class="footer__logo">
-            <span class="footer__seal">蜀</span>
-            <span class="footer__name">{{ t('app.name') }}</span>
+            <BrandLogo :size="56" />
+            <span class="footer__name sy-brand-text">{{ t('app.name') }}</span>
           </div>
           <p class="footer__slogan">{{ t('footer.slogan') }}</p>
           <ul class="socials">
@@ -692,18 +921,19 @@ watch(
               <p class="search__hint">{{ t('search.hint') }}</p>
             </div>
 
-            <!-- ---------- 无输入：历史 + 热门 ---------- -->
+            <!-- ---------- 无输入：搜索历史记录 + 热门搜索 ---------- -->
             <div v-else class="search__body">
-              <section v-if="searchHistory.length" class="search__group">
+              <section class="search__group">
                 <p class="search__group-title">
                   {{ t('search.recent') }}
-                  <button type="button" class="search__more" @click="clearHistory">{{ t('search.clear') }}</button>
+                  <button v-if="searchHistory.length" type="button" class="search__more" @click="clearHistory">{{ t('search.clear') }}</button>
                 </p>
-                <div class="search__chips">
+                <div v-if="searchHistory.length" class="search__chips">
                   <button v-for="h in searchHistory" :key="h" type="button" @click="searchBy(h)">
                     {{ h }}
                   </button>
                 </div>
+                <p v-else class="search__no-history">{{ t('search.noHistory') }}</p>
               </section>
 
               <section class="search__group">
@@ -739,11 +969,29 @@ watch(
 
           <div class="drawer__inner">
             <div class="drawer__logo">
-              <span class="drawer__seal">蜀</span>
+              <BrandLogo :size="48" />
               <span class="drawer__name">{{ t('app.name') }}</span>
             </div>
 
             <nav class="drawer__menu">
+              <button
+                type="button"
+                class="drawer__item"
+                :class="{ 'is-active': isActive('/') }"
+                @click="go('/')"
+              >
+                {{ t('nav.home') }}
+              </button>
+
+              <button
+                type="button"
+                class="drawer__item"
+                :class="{ 'is-active': megaActive }"
+                @click.stop="openMegaFromDrawer"
+              >
+                {{ t('nav.folk') }}
+              </button>
+
               <button
                 v-for="m in MENUS"
                 :key="m.path"
@@ -760,7 +1008,7 @@ watch(
               <template v-if="userStore.isLogin">
                 <button type="button" class="drawer__user" @click="go('/profile')">
                   <img v-if="avatarUrl" class="drawer__avatar" :src="avatarUrl" alt="" />
-                  <span v-else class="drawer__avatar drawer__avatar--text">{{ initial }}</span>
+                  <span v-else class="drawer__avatar drawer__avatar--ghost"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg></span>
                   {{ userStore.user?.username }}
                 </button>
                 <button type="button" class="drawer__logout" @click="logout">{{ t('nav.logout') }}</button>
@@ -780,6 +1028,9 @@ watch(
         </svg>
       </button>
     </transition>
+
+    <!-- ================= 蜀韵管家智能体入口（全站前台常驻；/assistant 页隐藏） ================= -->
+    <AiFab v-if="route.path !== '/assistant'" />
   </div>
 </template>
 
@@ -795,12 +1046,18 @@ watch(
   min-height: 100vh;
 }
 
+/* 用户下拉展开时，隐藏右侧滚动指示器（「蜀韵智游」+ 金色圆点），避免与菜单重叠影响观感 */
+.layout.is-user-menu-open :deep(.scroll-indicator) {
+  opacity: 0;
+  pointer-events: none;
+}
+
 .layout__main {
   flex: 1;
 
   /* 没有整屏 Hero 的页面（AI 管家 / 登录）需要让开固定导航栏 */
   &.is-flat {
-    padding-top: 80px;
+    padding-top: $nav-height;
   }
 }
 
@@ -818,17 +1075,23 @@ watch(
 
   /* 滚动 100px 后：磨砂玻璃 */
   &.is-solid {
-    background: rgba(14, 42, 71, 0.85);
+    background: var(--sy-nav-solid);
     backdrop-filter: blur(20px);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    box-shadow: var(--sy-nav-shadow);
 
     .nav__line {
       opacity: 1;
     }
+  }
+}
 
-    .nav__inner {
-      height: 64px;
-    }
+/* 夜间模式：导航栏为淡蓝底、文字保持白色，加一层柔影提升可读性 */
+html[data-theme='night'] .nav.is-solid {
+  .nav__item,
+  .nav__icon,
+  .nav-user__hello,
+  .nav__burger {
+    text-shadow: 0 1px 6px rgba(8, 22, 42, 0.45);
   }
 }
 
@@ -836,63 +1099,40 @@ watch(
   display: flex;
   align-items: center;
   gap: clamp(12px, 2vw, 36px);
-  height: 80px;
-  padding-inline: clamp(20px, 4vw, 80px);
-  transition: height $duration-slow $ease-out-expo;
+  height: $nav-height;
+  /* 左右留白上限 32px，使 Logo 距屏幕左侧 32px */
+  padding-inline: clamp(16px, 4vw, 32px);
 }
 
 /* ---------------- Logo ---------------- */
+/* 品牌徽标（太阳神鸟玉璧团章），hover 效果由 BrandLogo 内部处理 */
 .nav__logo {
   display: flex;
   align-items: center;
-  gap: 12px;
   cursor: pointer;
 }
 
-/* 篆刻印章：hover 轻微旋转 + 放大（0.5s） */
-.nav__seal {
-  @include flex-center;
-  width: 40px;
-  height: 40px;
-  border: 1.5px solid $color-gold;
-  border-radius: 6px;
-  background: rgba(140, 31, 40, 0.92);
-  font-family: $font-title;
-  font-weight: 900;
-  font-size: 22px;
-  color: $color-gold;
-  transition:
-    transform 0.5s $ease-out-expo,
-    box-shadow 0.5s $ease-out-expo;
-}
-
-.nav__logo:hover .nav__seal {
-  transform: rotate(-8deg) scale(1.12);
-  box-shadow: 0 0 0 4px rgba(201, 168, 106, 0.2);
-}
-
-.nav__brand {
-  font-family: $font-title;
-  font-weight: 900;
-  font-size: clamp(17px, 1.5vw, 21px);
-  letter-spacing: 0.18em;
-  color: $color-text-light;
+/* 放大后的徽标随视口缩放，始终略小于导航栏高度 */
+.nav__logo :deep(.brand-logo__mark) {
+  width: clamp(64px, 11vw, 144px);
+  height: clamp(64px, 11vw, 144px);
 }
 
 /* ---------------- 菜单 ---------------- */
 .nav__menu {
   display: flex;
   align-items: center;
-  gap: clamp(2px, 0.8vw, 14px);
+  gap: clamp(2px, 0.6vw, 10px);
   margin-left: clamp(6px, 2vw, 26px);
 }
 
 .nav__item {
   position: relative;
-  padding: 10px 14px;
+  padding: 8px 12px;
   font-family: $font-body;
-  font-size: 15px;
-  letter-spacing: 0.12em;
+  font-size: clamp(22px, 2.1vw, 32px);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
   color: rgba(245, 241, 232, 0.86);
   cursor: pointer;
   transition: color $duration-normal $ease-out-expo;
@@ -906,11 +1146,11 @@ watch(
 /* hover 下划线：从左到右展开 */
 .nav__item-line {
   position: absolute;
-  right: 14px;
-  bottom: 4px;
-  left: 14px;
+  right: 12px;
+  bottom: 2px;
+  left: 12px;
   height: 1.5px;
-  background: linear-gradient(90deg, $color-gold, rgba(201, 168, 106, 0.25));
+  background: linear-gradient(90deg, $color-gold, rgba(212, 179, 116, 0.25));
   transform: scaleX(0);
   transform-origin: left center;
   transition: transform $duration-normal $ease-out-expo;
@@ -946,15 +1186,16 @@ watch(
 .nav__actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
   margin-left: auto;
 }
 
 .nav__icon {
   @include flex-center;
-  width: 40px;
-  height: 40px;
-  border-radius: $radius-md;
+  /* 操作区整体放大两倍（随视口自适应，宽屏达到 2×） */
+  width: clamp(56px, 6vw, 80px);
+  height: clamp(56px, 6vw, 80px);
+  border-radius: $radius-lg;
   color: rgba(245, 241, 232, 0.88);
   transition:
     color $duration-fast $ease-out-expo,
@@ -963,7 +1204,7 @@ watch(
 
   &:hover {
     color: $color-gold;
-    background: rgba(201, 168, 106, 0.14);
+    background: rgba(212, 179, 116, 0.14);
     transform: translateY(-2px);
   }
 }
@@ -974,18 +1215,23 @@ watch(
 
 .nav-lang__btn {
   width: auto;
-  gap: 4px;
-  padding-inline: 10px;
+  gap: 8px;
+  padding-inline: 20px;
 }
 
 .nav-lang__text {
   font-family: $font-en-body;
-  font-size: 13px;
+  font-size: clamp(20px, 1.9vw, 26px);
   letter-spacing: 0.08em;
 }
 
 .nav-lang__caret {
   opacity: 0.7;
+}
+
+/* 主题切换（白天 / 夜间）：金色图标，位于语言切换右侧 */
+.nav-theme {
+  color: $color-gold;
 }
 
 /* 下拉菜单：磨砂玻璃 + 从上方滑入淡入 */
@@ -996,7 +1242,7 @@ watch(
   z-index: $z-header + 1;
   min-width: 196px;
   padding: 8px;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-lg;
   background: rgba(14, 42, 71, 0.86);
   backdrop-filter: blur(18px);
@@ -1019,7 +1265,7 @@ watch(
       color $duration-fast $ease-out-expo;
 
     &:hover {
-      background: rgba(201, 168, 106, 0.16);
+      background: rgba(212, 179, 116, 0.16);
       color: $color-gold;
     }
 
@@ -1041,6 +1287,22 @@ watch(
       font-size: 11px;
       opacity: 0.5;
     }
+  }
+}
+
+/* 用户下拉：直角 + 透明背景；打开时模糊并压暗身后的页面内容，隐藏重叠的文字 / 标识；内部元素整体放大 0.5× */
+.nav-user__menu {
+  min-width: 294px;
+  padding: 12px;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: blur(20px) brightness(0.7) saturate(1.1);
+  box-shadow: none;
+
+  button {
+    padding: 15px 18px;
+    border-radius: 0;
+    font-size: calc(#{$fs-small} * 1.5);
   }
 }
 
@@ -1069,9 +1331,9 @@ watch(
 }
 
 .nav-user__avatar {
-  width: 38px;
-  height: 38px;
-  border: 2px solid $color-gold;
+  width: clamp(52px, 5.6vw, 76px);
+  height: clamp(52px, 5.6vw, 76px);
+  border: 3px solid $color-gold;
   border-radius: 50%;
   object-fit: cover;
   transition:
@@ -1090,49 +1352,85 @@ watch(
 
 .nav-user__btn:hover .nav-user__avatar {
   transform: scale(1.06);
-  box-shadow: 0 0 0 4px rgba(201, 168, 106, 0.18);
+  box-shadow: 0 0 0 4px rgba(212, 179, 116, 0.18);
+}
+
+/* 未登录：空心头像（点击打开登录/注册面板） */
+.nav-user__avatar--ghost {
+  @include flex-center;
+  background: rgba(245, 241, 232, 0.08);
+  color: $color-gold;
+
+  /* 人形图标：较上一版放大 0.5×（20 → 30px） */
+  svg {
+    width: 30px;
+    height: 30px;
+  }
+}
+
+/* 头像旁问候语：你好，<账号名> */
+.nav-user__hello {
+  margin-left: 16px;
+  font-family: $font-body;
+  font-size: clamp(20px, 1.7vw, 32px);
+  letter-spacing: 0.06em;
+  color: rgba(245, 241, 232, 0.88);
+}
+
+.nav-user__btn {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 900px) {
+  .nav-user__hello {
+    display: none;
+  }
 }
 
 .nav-drop__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px 10px;
+  gap: 15px;
+  padding: 12px 15px 15px;
 }
 
 .nav-drop__avatar {
-  width: 40px;
-  height: 40px;
+  width: 60px;
+  height: 60px;
   border: 1px solid $color-gold;
   border-radius: 50%;
   object-fit: cover;
 
-  &--text {
+  &--ghost {
     @include flex-center;
     background: $color-primary;
-    font-family: $font-title;
-    font-weight: 900;
     color: $color-gold;
+
+    svg {
+      width: 30px;
+      height: 30px;
+    }
   }
 }
 
 .nav-drop__meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 
   b {
     font-family: $font-title;
     font-weight: 900;
-    font-size: $fs-small;
+    font-size: calc(#{$fs-small} * 1.5);
     color: $color-text-light;
     @include text-ellipsis(1);
   }
 
   em {
     font-style: normal;
-    font-size: 11px;
+    font-size: 17px;
     color: rgba(245, 241, 232, 0.5);
     @include text-ellipsis(1);
   }
@@ -1141,8 +1439,8 @@ watch(
 .nav-drop__sep {
   display: block;
   height: 1px;
-  margin: 6px 4px;
-  background: rgba(201, 168, 106, 0.24);
+  margin: 9px 6px;
+  background: rgba(212, 179, 116, 0.24);
 }
 
 .nav__login {
@@ -1176,7 +1474,7 @@ watch(
 
   &:hover {
     color: $color-gold;
-    background: rgba(201, 168, 106, 0.14);
+    background: rgba(212, 179, 116, 0.14);
   }
 }
 
@@ -1190,6 +1488,276 @@ watch(
   background: linear-gradient(90deg, transparent, $color-gold 50%, transparent);
   opacity: 0.45;
   transition: opacity $duration-slow $ease-out-expo;
+}
+
+/* ---------------- 蜀地风物：菜单入口 ---------------- */
+.nav-mega {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: transparent;
+}
+
+.nav-mega__caret {
+  margin-top: 2px;
+  transition: transform $duration-normal $ease-out-expo;
+}
+
+.nav-mega.is-active .nav-mega__caret {
+  transform: rotate(180deg);
+}
+
+/* Mega 入口用"短线"表示展开态，隐去通用圆点 */
+.nav-mega .nav__item-dot {
+  display: none;
+}
+
+/* 展开/悬停：底部金色短线（24×2，居中） */
+.nav-mega .nav__item-line {
+  right: auto;
+  left: 50%;
+  width: 24px;
+  height: 2px;
+  transform: translateX(-50%) scaleX(0);
+  transform-origin: center;
+}
+
+.nav-mega:hover .nav__item-line,
+.nav-mega.is-active .nav__item-line {
+  transform: translateX(-50%) scaleX(1);
+}
+
+/* ============================================================
+ * 蜀地风物 · 全屏 Mega Menu
+ * ========================================================== */
+.mega {
+  position: fixed;
+  top: $nav-height;
+  left: 0;
+  z-index: $z-header - 1;
+  width: 100vw;
+  height: 480px;
+  overflow: hidden;
+  background: rgba(14, 42, 71, 0.92);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+
+  /* 底部 1px 金色渐变线 */
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, $color-gold 50%, transparent);
+  }
+}
+
+.mega__inner {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  height: 100%;
+  padding: 48px clamp(24px, 8vw, 120px);
+}
+
+.mega__head {
+  flex: 0 0 auto;
+}
+
+.mega__title {
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: 28px;
+  letter-spacing: 0.08em;
+  background: linear-gradient(120deg, #f4e3bc 0%, $color-gold 55%, #b8935a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mega__sub {
+  margin-top: 8px;
+  font-family: $font-body;
+  font-size: 14px;
+  letter-spacing: 0.22em;
+  color: #7a95b8;
+}
+
+.mega__grid {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  min-height: 0;
+}
+
+.mega-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(201, 168, 106, 0.15);
+  border-radius: 12px;
+  background: #0f2540;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.45s $ease-out-expo,
+    border-color 0.45s $ease-out-expo,
+    box-shadow 0.45s $ease-out-expo;
+  /* 卡片依次淡入（backwards：延迟期间隐藏，动完回归常态，不干扰 hover 位移） */
+  animation: mega-card-in 0.45s $ease-out-expo backwards;
+
+  &:nth-child(1) {
+    animation-delay: 0.08s;
+  }
+
+  &:nth-child(2) {
+    animation-delay: 0.16s;
+  }
+
+  &:nth-child(3) {
+    animation-delay: 0.24s;
+  }
+
+  &:nth-child(4) {
+    animation-delay: 0.32s;
+  }
+
+  &:hover {
+    transform: translateY(-8px);
+    border-color: rgba(201, 168, 106, 0.6);
+    box-shadow: $shadow-lg;
+
+    .mega-card__img {
+      transform: scale(1.05);
+    }
+
+    .mega-card__arrow {
+      color: $color-gold;
+      transform: translateX(4px);
+    }
+  }
+}
+
+@keyframes mega-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mega-card__media {
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 4 / 3;
+  background: #0b1b30;
+}
+
+.mega-card__img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s $ease-out-expo;
+}
+
+.mega-card__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px;
+}
+
+.mega-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mega-card__name {
+  font-family: $font-title;
+  font-weight: 600;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  color: #fff;
+}
+
+.mega-card__arrow {
+  flex: 0 0 auto;
+  color: rgba(245, 241, 232, 0.55);
+  transition:
+    color 0.45s $ease-out-expo,
+    transform 0.45s $ease-out-expo;
+}
+
+.mega-card__count {
+  font-family: $font-en-body;
+  font-size: 14px;
+  letter-spacing: 0.1em;
+  color: $color-gold;
+}
+
+.mega-card__slogan {
+  font-family: $font-body;
+  font-size: 14px;
+  color: #7a95b8;
+}
+
+/* 展开动画：从顶部滑下 + 淡入 */
+.mega-enter-active {
+  transition:
+    opacity 0.4s $ease-out-expo,
+    transform 0.4s $ease-out-expo;
+}
+
+.mega-leave-active {
+  transition:
+    opacity 0.3s $ease-out-expo,
+    transform 0.3s $ease-out-expo;
+}
+
+.mega-enter-from,
+.mega-leave-to {
+  opacity: 0;
+  transform: translateY(-20px);
+}
+
+/* 小屏：面板高度自适应 + 2×2 网格 */
+@include responsive(md) {
+  .mega {
+    height: auto;
+    max-height: 72vh;
+    overflow-y: auto;
+  }
+
+  .mega__inner {
+    gap: 18px;
+    padding: 24px 20px 28px;
+  }
+
+  .mega__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .mega-card__body {
+    padding: 14px;
+  }
+
+  .mega-card__name {
+    font-size: 18px;
+  }
 }
 
 /* ============================================================
@@ -1208,21 +1776,23 @@ watch(
 
 .search__panel {
   align-self: flex-start;
-  width: min(720px, 100%);
-  padding: clamp(16px, 1.6vw, 22px);
-  border: 1px solid rgba(201, 168, 106, 0.45);
-  border-radius: $radius-lg;
-  background: rgba(14, 42, 71, 0.92);
+  /* 整体较上一版放大 1× */
+  width: min(1440px, 100%);
+  padding: clamp(32px, 3.2vw, 44px);
+  border: 1px solid rgba(212, 179, 116, 0.55);
+  /* 直角边框 + 白底 */
+  border-radius: 0;
+  background: #fff;
   box-shadow: $shadow-lg;
 }
 
 .search__head {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid rgba(201, 168, 106, 0.28);
-  color: $color-gold;
+  gap: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid rgba(212, 179, 116, 0.28);
+  color: $color-ink;
 }
 
 .search__input {
@@ -1230,41 +1800,41 @@ watch(
   border: none;
   background: transparent;
   font-family: $font-body;
-  font-size: clamp(15px, 1.3vw, 18px);
-  color: $color-text-light;
+  font-size: clamp(30px, 2.6vw, 36px);
+  color: $color-ink;
   caret-color: $color-gold;
 
   &::placeholder {
-    color: rgba(245, 241, 232, 0.4);
+    color: rgba(14, 42, 71, 0.4);
   }
 }
 
 .search__esc {
-  padding: 3px 10px;
-  border: 1px solid rgba(201, 168, 106, 0.4);
-  border-radius: $radius-sm;
-  font-size: 11px;
+  padding: 6px 20px;
+  border: 1px solid rgba(212, 179, 116, 0.6);
+  border-radius: calc(#{$radius-sm} * 2);
+  font-size: 22px;
   letter-spacing: 0.1em;
-  color: rgba(245, 241, 232, 0.6);
+  color: rgba(14, 42, 71, 0.6);
 }
 
 .search__list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 
   li {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 10px;
-    border-radius: $radius-md;
+    gap: 24px;
+    padding: 16px 20px;
+    border-radius: calc(#{$radius-md} * 2);
     cursor: pointer;
     transition: background-color $duration-fast $ease-out-expo;
 
     &:hover,
     &.is-active {
-      background: rgba(201, 168, 106, 0.14);
+      background: rgba(212, 179, 116, 0.14);
 
       .search__arrow {
         opacity: 1;
@@ -1281,11 +1851,11 @@ watch(
 }
 
 .search__group {
-  padding-top: 12px;
+  padding-top: 24px;
 
   & + .search__group {
-    margin-top: 12px;
-    border-top: 1px dashed rgba(201, 168, 106, 0.2);
+    margin-top: 24px;
+    border-top: 1px dashed rgba(212, 179, 116, 0.2);
   }
 }
 
@@ -1293,38 +1863,46 @@ watch(
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: 12px;
+  font-size: 24px;
   letter-spacing: 0.18em;
-  color: rgba(201, 168, 106, 0.9);
+  color: $color-ink;
 }
 
 .search__more {
   font-family: $font-body;
-  font-size: 12px;
+  font-size: 24px;
   letter-spacing: 0.06em;
-  color: rgba(245, 241, 232, 0.55);
+  color: rgba(14, 42, 71, 0.55);
   transition: color $duration-fast $ease-out-expo;
 
   &:hover {
-    color: $color-gold;
+    color: $color-primary;
   }
+}
+
+/* 历史为空时的占位提示 */
+.search__no-history {
+  font-family: $font-body;
+  font-size: calc(#{$fs-small} * 2);
+  letter-spacing: 0.06em;
+  color: rgba(14, 42, 71, 0.4);
 }
 
 /* 市州徽标 */
 .search__badge {
   @include flex-center;
-  width: 48px;
-  height: 48px;
+  width: 96px;
+  height: 96px;
   flex-shrink: 0;
-  border: 1px solid rgba(201, 168, 106, 0.5);
-  border-radius: $radius-sm;
-  background: rgba(140, 31, 40, 0.35);
+  border: 1px solid rgba(212, 179, 116, 0.5);
+  border-radius: calc(#{$radius-sm} * 2);
+  background: $color-primary;
   font-family: $font-title;
   font-weight: 900;
-  font-size: 15px;
+  font-size: 30px;
   color: $color-gold;
 }
 
@@ -1332,16 +1910,16 @@ watch(
 .search__chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 16px;
 
   button {
-    padding: 6px 14px;
-    border: 1px solid rgba(201, 168, 106, 0.4);
+    padding: 12px 28px;
+    border: 1px solid rgba(212, 179, 116, 0.6);
     border-radius: $radius-pill;
     font-family: $font-body;
-    font-size: 12px;
+    font-size: 24px;
     letter-spacing: 0.08em;
-    color: rgba(245, 241, 232, 0.75);
+    color: rgba(14, 42, 71, 0.8);
     transition:
       border-color $duration-fast $ease-out-expo,
       background-color $duration-fast $ease-out-expo,
@@ -1349,8 +1927,8 @@ watch(
 
     &:hover {
       border-color: $color-gold;
-      background: rgba(201, 168, 106, 0.16);
-      color: $color-gold;
+      background: rgba(212, 179, 116, 0.18);
+      color: $color-ink;
     }
   }
 }
@@ -1358,63 +1936,64 @@ watch(
 /* 命中关键词高亮 */
 .search__panel :deep(.hl) {
   padding: 0 1px;
-  background: rgba(201, 168, 106, 0.28);
+  background: rgba(212, 179, 116, 0.32);
   border-radius: 2px;
   font-style: normal;
-  color: $color-gold;
+  color: $color-primary;
 }
 
 .search__hint {
-  padding: 14px 4px 4px;
-  font-size: 11px;
+  padding: 28px 8px 8px;
+  font-size: 22px;
   letter-spacing: 0.1em;
-  color: rgba(245, 241, 232, 0.35);
+  color: rgba(14, 42, 71, 0.4);
   text-align: center;
 }
 
 .search__cover {
-  width: 48px;
-  height: 48px;
+  width: 96px;
+  height: 96px;
   flex-shrink: 0;
   object-fit: cover;
-  border: 1px solid rgba(201, 168, 106, 0.4);
-  border-radius: $radius-sm;
+  border: 1px solid rgba(212, 179, 116, 0.4);
+  border-radius: calc(#{$radius-sm} * 2);
 }
 
 .search__info {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
   min-width: 0;
 
   b {
     font-family: $font-title;
     font-weight: 900;
-    font-size: $fs-small;
-    color: $color-text-light;
+    font-size: calc(#{$fs-small} * 2);
+    color: $color-ink;
     @include text-ellipsis(1);
   }
 
   em {
     font-style: normal;
-    font-size: 12px;
-    color: rgba(245, 241, 232, 0.55);
+    font-size: 24px;
+    color: rgba(14, 42, 71, 0.55);
   }
 }
 
 .search__arrow {
   margin-left: auto;
-  color: $color-gold;
-  opacity: 0.5;
+  font-size: 32px;
+  color: $color-primary;
+  opacity: 0.55;
   transition:
     opacity $duration-fast $ease-out-expo,
     transform $duration-fast $ease-out-expo;
 }
 
 .search__empty {
-  padding: 22px 6px 6px;
-  font-size: $fs-small;
-  color: rgba(245, 241, 232, 0.55);
+  padding: 44px 12px 12px;
+  font-size: calc(#{$fs-small} * 2);
+  color: rgba(14, 42, 71, 0.55);
   text-align: center;
 }
 
@@ -1448,13 +2027,13 @@ watch(
   @include flex-center;
   width: 44px;
   height: 44px;
-  border: 1px solid rgba(201, 168, 106, 0.5);
+  border: 1px solid rgba(212, 179, 116, 0.5);
   border-radius: 50%;
   color: $color-gold;
   transition: background-color $duration-fast $ease-out-expo;
 
   &:hover {
-    background: rgba(201, 168, 106, 0.16);
+    background: rgba(212, 179, 116, 0.16);
   }
 }
 
@@ -1473,19 +2052,6 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.drawer__seal {
-  @include flex-center;
-  width: 42px;
-  height: 42px;
-  border: 1.5px solid $color-gold;
-  border-radius: 6px;
-  background: rgba(140, 31, 40, 0.92);
-  font-family: $font-title;
-  font-weight: 900;
-  font-size: 23px;
-  color: $color-gold;
 }
 
 .drawer__name {
@@ -1517,12 +2083,12 @@ watch(
 
   &:hover {
     color: $color-gold;
-    background: rgba(201, 168, 106, 0.12);
+    background: rgba(212, 179, 116, 0.12);
   }
 
   &.is-active {
     color: $color-gold;
-    background: rgba(201, 168, 106, 0.16);
+    background: rgba(212, 179, 116, 0.16);
   }
 }
 
@@ -1533,7 +2099,7 @@ watch(
   gap: 12px;
   width: 100%;
   padding-top: 20px;
-  border-top: 1px solid rgba(201, 168, 106, 0.24);
+  border-top: 1px solid rgba(212, 179, 116, 0.24);
 }
 
 .drawer__user {
@@ -1551,11 +2117,9 @@ watch(
   border-radius: 50%;
   object-fit: cover;
 
-  &--text {
+  &--ghost {
     @include flex-center;
     background: $color-primary;
-    font-family: $font-title;
-    font-weight: 900;
     color: $color-gold;
   }
 }
@@ -1676,25 +2240,9 @@ watch(
   gap: 10px;
 }
 
-.footer__seal {
-  @include flex-center;
-  width: 36px;
-  height: 36px;
-  border: 1.5px solid $color-gold;
-  border-radius: 6px;
-  background: rgba(140, 31, 40, 0.85);
-  font-family: $font-title;
-  font-weight: 900;
-  font-size: 20px;
-  color: $color-gold;
-}
-
 .footer__name {
-  font-family: $font-title;
-  font-weight: 900;
-  font-size: 18px;
-  letter-spacing: 0.18em;
-  color: $color-text-light;
+  /* 只定字号；金色立体效果全部交给全局 .sy-brand-text */
+  font-size: 24px;
 }
 
 .footer__slogan {
@@ -1716,7 +2264,7 @@ watch(
   @include flex-center;
   width: 40px;
   height: 40px;
-  border: 1px solid rgba(201, 168, 106, 0.36);
+  border: 1px solid rgba(212, 179, 116, 0.36);
   border-radius: 50%;
   color: rgba(245, 241, 232, 0.7);
   transition:
@@ -1788,7 +2336,7 @@ watch(
 .footer__bottom {
   margin-top: clamp(40px, 5vw, 64px);
   padding-top: 24px;
-  border-top: 1px solid rgba(201, 168, 106, 0.16);
+  border-top: 1px solid rgba(212, 179, 116, 0.16);
   text-align: center;
 }
 
@@ -1858,10 +2406,6 @@ watch(
 
 @include responsive(sm) {
   .nav-lang {
-    display: none;
-  }
-
-  .nav__brand {
     display: none;
   }
 }

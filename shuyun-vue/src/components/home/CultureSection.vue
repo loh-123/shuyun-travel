@@ -1,53 +1,102 @@
 <script setup lang="ts">
 /**
- * 第四屏：八大文化入口
+ * 第四屏（原为第五屏）：八大文化入口
  * - 宣纸底色（由 Home.vue 背景舞台提供）
- * - 8 个手绘线性图标（公共组件 CultureIcon，1.5px 金色描边）
- * - 卡片 hover 抬升 + 阴影加深；点击进入 /culture/:id
- * - 复用公共能力：SectionTitle、CultureIcon、GhostButton、useScrollReveal
+ * - 调 listCulture() 取前 8 条，渲染为文化卡片（封面图 + 名称 + 分类 + 摘要）
+ * - 图片懒加载 + 加载失败兜底；含骨架屏 / 空数据 / 加载失败三种状态
+ * - 点击卡片进入 /culture/:id
+ * - 复用公共能力：SectionTitle、useScrollReveal、GSAP
  */
-import { ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import gsap from 'gsap'
+
 import SectionTitle from '@/components/common/SectionTitle.vue'
-import CultureIcon from '@/components/common/CultureIcon.vue'
-import GhostButton from '@/components/common/GhostButton.vue'
 import { useScrollReveal } from '@/composables/useScrollReveal'
+import { listCulture, type CultureVO } from '@/api/culture'
+import StateBlock from '@/components/common/StateBlock.vue'
 
 const router = useRouter()
 const rootEl = ref<HTMLElement | null>(null)
 const gridEl = ref<HTMLElement | null>(null)
 
-interface CultureItem {
-  id: number
-  cn: string
-  en: string
-  desc: string
-}
+const list = ref<CultureVO[]>([])
+const loading = ref(true)
+/** 接口是否加载失败 */
+const failed = ref(false)
+/** 单张图片加载失败的标记（按 id） */
+const imgFailed = ref<Record<number, boolean>>({})
 
-const CULTURES: CultureItem[] = [
-  { id: 1, cn: '川剧变脸', en: 'Sichuan Opera', desc: '挥手转身之间变换脸谱，东方舞台的独门绝技。' },
-  { id: 2, cn: '蜀绣', en: 'Shu Embroidery', desc: '中国四大名绣之一，针脚细密，色彩明快。' },
-  { id: 3, cn: '川菜', en: 'Sichuan Cuisine', desc: '一菜一格，百菜百味，麻辣之外的万千层次。' },
-  { id: 4, cn: '茶马古道', en: 'Tea Horse Road', desc: '以茶易马，穿越川滇藏高山峡谷的千年商路。' },
-  { id: 5, cn: '三国文化', en: 'Three Kingdoms', desc: '蜀汉故地，武侯祠与剑门关里的英雄叙事。' },
-  { id: 6, cn: '三星堆', en: 'Sanxingdui', desc: '纵目面具与青铜神树，古蜀文明的神秘现场。' },
-  { id: 7, cn: '大熊猫', en: 'Giant Panda', desc: '国宝栖息地，成都与卧龙的竹海与憨态。' },
-  { id: 8, cn: '酒文化', en: 'Liquor Culture', desc: '五粮液与泸州老窖，川酒里的时间与风土。' },
-]
+/** 区块背景：取首条文化封面作为真实背景图 */
+const bgImage = ref('')
+/** 背景样式：真实图片 + 上下深浅渐变遮罩（保证标题与卡片可读） */
+const bgStyle = computed(() =>
+  bgImage.value
+    ? {
+        backgroundImage: `linear-gradient(180deg, rgba(245,241,232,0.72) 0%, rgba(245,241,232,0.4) 46%, rgba(245,241,232,0.78) 100%), url('${bgImage.value}')`,
+      }
+    : undefined,
+)
 
-// 页头文案入场（与原实现参数一致）
+let cardCtx: gsap.Context | null = null
+
+// 页头文案入场
 useScrollReveal(rootEl, '.culture__animate', { y: 32, duration: 0.9, stagger: 0.1, start: 'top 72%' })
 
-// 卡片逐个入场（以网格为触发元素）
-useScrollReveal(gridEl, '.culture__card', { y: 48, duration: 0.9, stagger: 0.07, start: 'top 82%' })
+/** 图片加载失败：切到纯色占位 */
+function onImgError(item: CultureVO) {
+  imgFailed.value = { ...imgFailed.value, [item.id]: true }
+}
 
 function goDetail(id: number) {
   router.push(`/culture/${id}`)
 }
+
+async function loadList() {
+  loading.value = true
+  failed.value = false
+  try {
+    const data = await listCulture()
+    const arr = Array.isArray(data) ? data : []
+    // 取前 8 条（后端一次返回全部，不分页）
+    list.value = arr.slice(0, 8)
+    // 区块背景：用真实文化封面图
+    bgImage.value = list.value[0]?.coverImage || ''
+  } catch {
+    failed.value = true
+    list.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(async () => {
+  await loadList()
+
+  // 卡片异步渲染，数据就位后再补入场动画
+  await nextTick()
+  cardCtx = gsap.context(() => {
+    if (gridEl.value) {
+      gsap.from('.culture__card', {
+        y: 48,
+        opacity: 0,
+        duration: 0.9,
+        stagger: 0.07,
+        ease: 'power3.out',
+        scrollTrigger: { trigger: gridEl.value, start: 'top 82%', once: true },
+      })
+    }
+  }, rootEl.value ?? undefined)
+})
+
+onUnmounted(() => {
+  cardCtx?.revert()
+  cardCtx = null
+})
 </script>
 
 <template>
-  <div ref="rootEl" class="culture">
+  <div ref="rootEl" class="culture" :style="bgStyle">
     <div class="sy-container culture__inner">
       <SectionTitle
         class="culture__head"
@@ -58,20 +107,37 @@ function goDetail(id: number) {
         desc="川剧、蜀绣、川菜、茶马古道、三国、三星堆、熊猫与美酒 —— 八条线索，串起巴蜀大地上最有温度的部分。"
       />
 
-      <div ref="gridEl" class="culture__grid">
+      <!-- 加载中 / 失败 / 空数据 -->
+      <StateBlock v-if="loading" state="loading" />
+      <StateBlock v-else-if="failed" state="error" :retry="loadList" />
+      <StateBlock v-else-if="!list.length" state="empty" empty-text="暂无文化内容" />
+
+      <!-- 正常列表 -->
+      <div v-else ref="gridEl" class="culture__grid">
         <article
-          v-for="item in CULTURES"
+          v-for="item in list"
           :key="item.id"
           class="culture__card"
           @click="goDetail(item.id)"
         >
-          <CultureIcon class="culture__icon" :name="item.cn" />
+          <div class="culture__media">
+            <img
+              v-if="item.coverImage && !imgFailed[item.id]"
+              class="culture__img"
+              :src="item.coverImage"
+              :alt="item.name"
+              loading="lazy"
+              @error="onImgError(item)"
+            />
+            <div v-else class="culture__img-fallback">{{ (item.name || '蜀').slice(0, 1) }}</div>
 
-          <h3 class="culture__name">{{ item.cn }}</h3>
-          <p class="culture__en">{{ item.en }}</p>
-          <p class="culture__text">{{ item.desc }}</p>
+            <span v-if="item.category" class="culture__cat">{{ item.category }}</span>
+          </div>
 
-          <GhostButton class="culture__more">了解详情</GhostButton>
+          <div class="culture__body">
+            <h3 class="culture__name">{{ item.name }}</h3>
+            <p class="culture__text">{{ item.summary || '' }}</p>
+          </div>
         </article>
       </div>
     </div>
@@ -88,7 +154,11 @@ function goDetail(id: number) {
   width: 100%;
   height: 100%;
   overflow-y: auto;
-  background: transparent;
+  background-color: transparent;
+  /* 真实文化背景图：铺满居中（叠加深浅渐变保证可读） */
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   color: $color-text-dark;
 }
 
@@ -108,7 +178,7 @@ function goDetail(id: number) {
 /* ---------------- 卡片网格 ---------------- */
 .culture__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: $space-md;
 }
 
@@ -117,61 +187,130 @@ function goDetail(id: number) {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: clamp(20px, 2vw, 32px);
-  border: 1px solid rgba(201, 168, 106, 0.42);
+  overflow: hidden;
+  border: 1px solid rgba(212, 179, 116, 0.42);
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.55);
+  background: rgba(var(--sy-surface-rgb), 0.72);
   box-shadow: $shadow-md;
   backdrop-filter: blur(6px);
+  cursor: pointer;
 
-  &:hover {
-    .culture__icon {
-      color: $color-gold;
-      transform: rotate(-2deg) scale(1.06);
-    }
-
-    .culture__more::after {
-      transform: scaleX(1);
-    }
+  &:hover .culture__img {
+    transform: scale(1.06);
   }
 }
 
-.culture__icon {
-  width: clamp(40px, 3.4vw, 56px);
-  color: $color-primary;
-  transition:
-    color $duration-normal $ease-out-expo,
-    transform $duration-normal $ease-out-expo;
+.culture__media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: linear-gradient(135deg, #d9cdb8, #bfae90);
+}
+
+.culture__img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.6s $ease-out-expo;
+}
+
+.culture__img-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, $color-gold, $color-primary);
+  color: #fff;
+  font-family: $font-title;
+  font-size: 2rem;
+}
+
+.culture__cat {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(122, 26, 34, 0.9);
+  color: #f5f1e8;
+  font-size: $fs-small;
+  letter-spacing: 0.08em;
+}
+
+.culture__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: clamp(14px, 1.4vw, 20px);
 }
 
 .culture__name {
-  margin-top: 6px;
   font-family: $font-title;
   font-size: $fs-h3;
   letter-spacing: 0.08em;
   color: $color-text-dark;
 }
 
-.culture__en {
-  font-family: $font-en-body;
-  font-size: $fs-small;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
-  color: $color-gold;
-}
-
 .culture__text {
-  margin-top: 4px;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   font-size: $fs-small;
   line-height: 1.8;
-  color: rgba(26, 26, 26, 0.68);
+  color: rgba(var(--sy-text-rgb), 0.68);
 }
 
-.culture__more {
-  align-self: flex-start;
-  margin-top: 10px;
-  color: $color-primary;
+/* ---------------- 骨架屏 ---------------- */
+.culture__card--skeleton {
+  pointer-events: none;
+}
+
+.culture__media--skeleton,
+.culture__skeleton-line {
+  background: linear-gradient(
+    90deg,
+    rgba(212, 179, 116, 0.14) 25%,
+    rgba(212, 179, 116, 0.3) 37%,
+    rgba(212, 179, 116, 0.14) 63%
+  );
+  background-size: 400% 100%;
+  animation: cultureShimmer 1.4s ease infinite;
+}
+
+.culture__media--skeleton {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+}
+
+.culture__skeleton-line {
+  height: 14px;
+  margin: 12px 16px 0;
+  border-radius: 6px;
+
+  &--short {
+    width: 40%;
+    margin-bottom: 16px;
+  }
+}
+
+@keyframes cultureShimmer {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: 0 0;
+  }
+}
+
+/* ---------------- 空 / 失败状态 ---------------- */
+.culture__state {
+  padding: clamp(40px, 8vh, 80px);
+  font-family: $font-title;
+  font-size: $fs-h3;
+  letter-spacing: 0.1em;
+  text-align: center;
+  color: rgba(var(--sy-text-rgb), 0.6);
 }
 
 /* ---------------- 响应式 ---------------- */

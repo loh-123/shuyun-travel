@@ -42,4 +42,16 @@ public class ScenicSpotVO implements Serializable {
 
     /** 标签 */
     private String tags;
+
+    /** 推荐理由 */
+    private String recommendReason;
+
+    /** 地址（供城市 3D 页面按区县归集） */
+    private String address;
+
+    /** 经度（供城市 3D 页面 POI 打点） */
+    private java.math.BigDecimal longitude;
+
+    /** 纬度（供城市 3D 页面 POI 打点） */
+    private java.math.BigDecimal latitude;
 }

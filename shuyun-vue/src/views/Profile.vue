@@ -21,6 +21,8 @@ import { useUserStore } from '@/stores/user'
 import { useCountUp } from '@/composables/useCountUp'
 import GoldButton from '@/components/common/GoldButton.vue'
 import GhostButton from '@/components/common/GhostButton.vue'
+import ProfileMenuIcon from '@/components/common/ProfileMenuIcon.vue'
+import StateBlock from '@/components/common/StateBlock.vue'
 import { t } from '@/i18n'
 
 /* ------------------------------------------------------------
@@ -90,13 +92,13 @@ const COLLAGE = [
   'https://picsum.photos/seed/shuyun-city-20/600/400',
 ]
 
-/** 菜单 */
-const MENUS: { key: MenuKey; label: string; icon: string }[] = [
-  { key: 'trips', label: 'nav.trips', icon: '🗺' },
-  { key: 'collection', label: 'nav.collection', icon: '❤' },
-  { key: 'history', label: 'pf.menuHistory', icon: '🕘' },
-  { key: 'notes', label: 'pf.menuNotes', icon: '📝' },
-  { key: 'settings', label: 'pf.menuSettings', icon: '⚙' },
+/** 菜单（图标名与 key 一致，由 ProfileMenuIcon 渲染） */
+const MENUS: { key: MenuKey; label: string }[] = [
+  { key: 'trips', label: 'nav.trips' },
+  { key: 'collection', label: 'nav.collection' },
+  { key: 'history', label: 'pf.menuHistory' },
+  { key: 'notes', label: 'pf.menuNotes' },
+  { key: 'settings', label: 'pf.menuSettings' },
 ]
 
 /** 数据概览配置 */
@@ -126,13 +128,32 @@ function applyQueryTab() {
 }
 
 const active = ref<MenuKey>('trips')
+/** 折叠状态持久化 key（'1' 折叠 / '0' 展开） */
+const SIDEBAR_KEY = 'shuyun:profile:sidebar-collapsed'
+/** 侧边栏是否折叠（展开 240px / 折叠 64px）；默认展开 */
+const collapsed = ref(localStorage.getItem(SIDEBAR_KEY) === '1')
+/** 小屏侧边栏抽屉是否展开 */
+const mobileOpen = ref(false)
+
+/** 切换折叠并持久化 */
+function toggleCollapse() {
+  collapsed.value = !collapsed.value
+  localStorage.setItem(SIDEBAR_KEY, collapsed.value ? '1' : '0')
+}
+
+/** 选择菜单（小屏时同时关上抽屉） */
+function selectMenu(key: MenuKey) {
+  active.value = key
+  mobileOpen.value = false
+}
+
 const statsEl = ref<HTMLElement | null>(null)
 
-/** 头像：后端没给就用 DiceBear */
+/** 头像：后端没给就用 DiceBear 生成（notionists 简约商务风） */
 const avatarUrl = computed(
   () =>
     userStore.user?.avatar ||
-    `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(
+    `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(
       userStore.user?.username || 'shuyun',
     )}`,
 )
@@ -792,20 +813,47 @@ watch(
     </div>
 
     <!-- ================= 3. 主体 ================= -->
-    <div class="sy-container pf-body">
-      <!-- 左：菜单 -->
-      <ul class="pf-menu">
-        <li
-          v-for="m in MENUS"
-          :key="m.key"
-          class="pf-menu__item"
-          :class="{ 'is-active': m.key === active }"
-          @click="active = m.key"
+    <div
+      class="sy-container pf-body"
+      :class="{ 'is-collapsed': collapsed, 'is-mobile-open': mobileOpen }"
+    >
+      <!-- 小屏：呼出侧边栏 -->
+      <button type="button" class="pf-side-trigger" @click="mobileOpen = true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M4 7h16M7 12h10M10 17h4" /></svg>
+        菜单
+      </button>
+
+      <!-- 左：可折叠侧边栏 -->
+      <aside class="pf-side" :class="{ 'is-collapsed': collapsed }">
+        <ul class="pf-menu">
+          <li
+            v-for="m in MENUS"
+            :key="m.key"
+            class="pf-menu__item"
+            :class="{ 'is-active': m.key === active }"
+            @click="selectMenu(m.key)"
+          >
+            <ProfileMenuIcon class="pf-menu__icon" :name="m.key" />
+            <span class="pf-menu__label">{{ t(m.label) }}</span>
+            <svg class="pf-menu__arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+            <span class="pf-menu__tip">{{ t(m.label) }}</span>
+          </li>
+        </ul>
+
+        <!-- 折叠按钮：固定在侧边栏右边缘、垂直居中 -->
+        <button
+          type="button"
+          class="pf-side__toggle"
+          :aria-label="collapsed ? '展开菜单' : '折叠菜单'"
+          @click="toggleCollapse"
         >
-          <span class="pf-menu__icon">{{ m.icon }}</span>
-          {{ t(m.label) }}
-        </li>
-      </ul>
+          <svg v-if="collapsed" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6l6 6-6 6" /></svg>
+          <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6l-6 6 6 6" /></svg>
+        </button>
+      </aside>
+
+      <!-- 小屏遮罩 -->
+      <div class="pf-side-mask" @click="mobileOpen = false" />
 
       <!-- 右：内容区（切换淡出淡入） -->
       <div class="pf-content">
@@ -823,7 +871,8 @@ watch(
                 <GoldButton size="sm" @click="router.push('/assistant')">{{ t('pf.newTrip') }}</GoldButton>
               </div>
 
-              <div v-loading="loadingTrips" class="trips">
+              <StateBlock v-if="loadingTrips" state="loading" />
+              <div v-else class="trips">
                 <article
                   v-for="trip in trips"
                   :key="trip.id"
@@ -865,7 +914,8 @@ watch(
                 <span class="pf-head__count">{{ t('pf.collectionCount', { n: collections.length }) }}</span>
               </div>
 
-              <div v-loading="loadingCollection" class="cards">
+              <StateBlock v-if="loadingCollection" state="loading" />
+              <div v-else class="cards">
                 <article
                   v-for="item in collections"
                   :key="item.id"
@@ -904,7 +954,8 @@ watch(
                 </button>
               </div>
 
-              <div v-loading="loadingHistory" class="foot-wrap">
+              <StateBlock v-if="loadingHistory" state="loading" />
+              <div v-else class="foot-wrap">
                 <section v-for="group in historyGrouped" :key="group.day" class="foot-group">
                   <p class="foot-group__day">{{ group.day }}</p>
                   <ol class="foot">
@@ -952,7 +1003,8 @@ watch(
                 </label>
               </div>
 
-              <div v-loading="loadingNotes" class="notes">
+              <StateBlock v-if="loadingNotes" state="loading" />
+              <div v-else class="notes">
                 <article
                   v-for="(item, i) in notes"
                   :key="item.id"
@@ -1204,7 +1256,7 @@ watch(
   border-radius: 50%;
   background: $color-paper;
   box-shadow:
-    0 0 0 6px rgba(201, 168, 106, 0.16),
+    0 0 0 6px rgba(212, 179, 116, 0.16),
     $shadow-lg;
   cursor: pointer;
 
@@ -1225,7 +1277,7 @@ watch(
   display: grid;
   place-items: center;
   background: rgba(14, 42, 71, 0.6);
-  font-size: 12px;
+  font-size: 18px;
   letter-spacing: 0.16em;
   color: $color-gold;
   opacity: 0;
@@ -1240,7 +1292,7 @@ watch(
   margin-top: clamp(14px, 2vh, 22px);
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(24px, 2.8vw, 42px);
+  font-size: clamp(36px, 4.2vw, 63px);
   letter-spacing: 0.1em;
   color: $color-text-light;
   text-shadow: $shadow-text;
@@ -1249,7 +1301,7 @@ watch(
 .pf-hero__bio {
   margin-top: 10px;
   font-family: $font-body;
-  font-size: clamp(13px, 1.1vw, 16px);
+  font-size: clamp(19.5px, 1.65vw, 24px);
   letter-spacing: 0.14em;
   color: rgba(245, 241, 232, 0.82);
   text-shadow: $shadow-text-soft;
@@ -1264,11 +1316,11 @@ watch(
   align-items: center;
   gap: 8px;
   padding: 10px 18px;
-  border: 1px solid rgba(201, 168, 106, 0.6);
+  border: 1px solid rgba(212, 179, 116, 0.6);
   border-radius: $radius-pill;
   background: rgba(14, 42, 71, 0.35);
   backdrop-filter: blur(8px);
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   letter-spacing: 0.1em;
   color: $color-gold;
   transition:
@@ -1293,7 +1345,7 @@ watch(
   overflow: hidden;
   border: 1px solid $color-border-gold;
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(var(--sy-surface-rgb), 0.92);
   box-shadow: $shadow-lg;
   position: relative;
   z-index: $z-content;
@@ -1307,58 +1359,61 @@ watch(
   padding: clamp(18px, 2.2vw, 30px) 12px;
 
   & + & {
-    border-left: 1px solid rgba(201, 168, 106, 0.28);
+    border-left: 1px solid rgba(212, 179, 116, 0.28);
   }
 }
 
 .pf-stats__num {
   font-family: $font-en;
-  font-size: clamp(28px, 3.2vw, 46px);
+  font-size: clamp(42px, 4.8vw, 69px);
   line-height: 1;
   color: $color-gold;
 }
 
 .pf-stats__label {
   font-family: $font-body;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   letter-spacing: 0.14em;
-  color: rgba(26, 26, 26, 0.55);
+  color: rgba(var(--sy-text-rgb), 0.55);
 }
 
 /* ============================================================
  * 3. 主体：菜单 + 内容
  * ========================================================== */
 .pf-body {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
+  display: flex;
+  align-items: flex-start;
   gap: clamp(20px, 3vw, 46px);
-  align-items: start;
   padding-block: clamp(28px, 4vw, 56px) clamp(48px, 7vw, 110px);
 }
 
 .pf-menu {
-  position: sticky;
-  top: 92px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* 通栏全高：随屏幕高度自适应 */
+  height: calc(100vh - #{$nav-height} - 48px);
+  min-height: 360px;
   padding: 10px;
   border: 1px solid $color-border-gold;
-  border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-md;
+  /* 直角 */
+  border-radius: 0;
+  background: rgba(var(--sy-surface-rgb), 0.62);
+  overflow-y: auto;
 }
 
 .pf-menu__item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
-  border-radius: $radius-md;
+  /* 直角 */
+  border-radius: 0;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.08em;
-  color: rgba(26, 26, 26, 0.76);
+  font-size: calc(#{$fs-body} * 1.5);
+  letter-spacing: 0.06em;
+  color: rgba(var(--sy-text-rgb), 0.76);
   cursor: pointer;
   transition:
     background-color $duration-normal $ease-out-expo,
@@ -1366,22 +1421,172 @@ watch(
     transform $duration-normal $ease-out-expo;
 
   &:hover {
-    background: rgba(140, 31, 40, 0.07);
+    background: rgba(212, 179, 116, 0.14);
+    color: $color-gold;
     transform: translateX(3px);
   }
 
   &.is-active {
     background: linear-gradient(120deg, $color-primary, #6e141c);
     color: $color-text-light;
-    box-shadow: 0 8px 20px rgba(140, 31, 40, 0.22);
+    box-shadow: 0 8px 20px rgba(122, 26, 34, 0.22);
+
+    // 选中：金色左侧 3px 竖条
+    &::before {
+      content: '';
+      position: absolute;
+      top: 8px;
+      bottom: 8px;
+      left: 0;
+      width: 3px;
+      border-radius: 0;
+      background: $color-gold;
+    }
+
+    .pf-menu__arrow {
+      color: $color-gold;
+    }
   }
 }
 
 .pf-menu__icon {
-  font-size: 15px;
+  flex-shrink: 0;
+  color: rgba(var(--sy-text-rgb), 0.5);
+  transition: color $duration-normal $ease-out-expo;
+}
+
+.pf-menu__item:hover .pf-menu__icon,
+.pf-menu__item.is-active .pf-menu__icon {
+  color: $color-gold;
+}
+
+.pf-menu__label {
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.pf-menu__arrow {
+  flex-shrink: 0;
+  color: rgba(var(--sy-text-rgb), 0.3);
+  transition: transform $duration-normal $ease-out-expo;
+}
+
+.pf-menu__tip {
+  position: absolute;
+  top: 50%;
+  left: calc(100% + 14px);
+  z-index: 30;
+  padding: 6px 12px;
+  border-radius: $radius-md;
+  background: rgba(14, 42, 71, 0.94);
+  color: $color-text-light;
+  font-size: calc(#{$fs-tiny} * 1.5);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%) scale(0.96);
+  pointer-events: none;
+  transition:
+    opacity $duration-fast $ease-out-expo,
+    transform $duration-fast $ease-out-expo;
+}
+
+/* ---------------- 可折叠侧边栏 ---------------- */
+.pf-side {
+  position: sticky;
+  top: calc(#{$nav-height} + 24px);
+  flex-shrink: 0;
+  width: 240px;
+  transition: width $duration-fast $ease-out-expo;
+
+  // 右边缘 1px 金色渐变分隔线
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: -1px;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(
+      180deg,
+      rgba(212, 179, 116, 0) 0%,
+      $color-gold 50%,
+      rgba(212, 179, 116, 0) 100%
+    );
+  }
+}
+
+.pf-side.is-collapsed {
+  width: 64px;
+
+  .pf-menu__label,
+  .pf-menu__arrow {
+    display: none;
+  }
+
+  .pf-menu__item {
+    justify-content: center;
+    padding: 12px 0;
+
+    &:hover {
+      transform: none;
+    }
+  }
+
+  .pf-menu__item:hover .pf-menu__tip {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+}
+
+/* 折叠按钮：侧边栏右边缘、垂直居中 */
+.pf-side__toggle {
+  position: absolute;
+  top: 50%;
+  right: -16px;
+  z-index: 12;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  border: 1px solid $color-gold;
+  /* 直角 */
+  border-radius: 0;
+  background: $color-paper;
+  color: var(--sy-accent);
+  box-shadow: $shadow-sm;
+  transition:
+    background-color $duration-fast $ease-out-expo,
+    color $duration-fast $ease-out-expo;
+
+  &:hover {
+    background: $color-gold;
+    color: $color-ink;
+  }
+}
+
+/* 小屏「菜单」按钮（默认隐藏） */
+.pf-side-trigger {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border: 1px solid $color-gold;
+  border-radius: $radius-pill;
+  font-family: $font-body;
+  font-size: calc(#{$fs-small} * 1.5);
+  letter-spacing: 0.1em;
+  color: var(--sy-accent);
+}
+
+.pf-side-mask {
+  display: none;
 }
 
 .pf-content {
+  flex: 1;
   min-width: 0;
 }
 
@@ -1417,7 +1622,7 @@ watch(
   padding-left: 16px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(18px, 1.8vw, 26px);
+  font-size: clamp(27px, 2.7vw, 39px);
   letter-spacing: 0.1em;
   color: $color-ink;
 
@@ -1433,20 +1638,20 @@ watch(
 }
 
 .pf-head__count {
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.5);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.5);
 }
 
 .pf-head__clear {
   padding: 7px 16px;
-  border: 1px solid rgba(140, 31, 40, 0.3);
+  border: 1px solid rgba(122, 26, 34, 0.3);
   border-radius: $radius-pill;
-  font-size: $fs-small;
-  color: $color-primary;
+  font-size: calc(#{$fs-small} * 1.5);
+  color: var(--sy-accent);
   transition: background-color $duration-fast $ease-out-expo;
 
   &:hover {
-    background: rgba(140, 31, 40, 0.08);
+    background: rgba(122, 26, 34, 0.08);
   }
 }
 
@@ -1473,7 +1678,7 @@ watch(
   overflow: hidden;
   border: 1px solid $color-border-gold;
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(var(--sy-surface-rgb), 0.7);
   box-shadow: $shadow-md;
   cursor: pointer;
   transition:
@@ -1519,7 +1724,7 @@ watch(
   border-radius: $radius-pill;
   background: rgba(14, 42, 71, 0.6);
   backdrop-filter: blur(6px);
-  font-size: 12px;
+  font-size: 18px;
   letter-spacing: 0.1em;
   color: $color-gold;
 }
@@ -1534,7 +1739,7 @@ watch(
 .trip__title {
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(16px, 1.4vw, 21px);
+  font-size: clamp(24px, 2.1vw, 31.5px);
   letter-spacing: 0.06em;
   color: $color-ink;
   @include text-ellipsis(1);
@@ -1544,8 +1749,8 @@ watch(
   display: flex;
   flex-wrap: wrap;
   gap: 8px 14px;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.6);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.6);
 }
 
 .trip__foot {
@@ -1555,12 +1760,12 @@ watch(
   gap: 10px;
   margin-top: auto;
   padding-top: 10px;
-  border-top: 1px dashed rgba(140, 31, 40, 0.15);
+  border-top: 1px dashed rgba(122, 26, 34, 0.15);
 }
 
 .trip__time {
-  font-size: 12px;
-  color: rgba(26, 26, 26, 0.45);
+  font-size: 18px;
+  color: rgba(var(--sy-text-rgb), 0.45);
 }
 
 .trip__acts {
@@ -1570,11 +1775,11 @@ watch(
 
 .trip__btn {
   padding: 6px 14px;
-  border: 1px solid rgba(201, 168, 106, 0.6);
+  border: 1px solid rgba(212, 179, 116, 0.6);
   border-radius: $radius-pill;
-  font-size: 12px;
+  font-size: 18px;
   letter-spacing: 0.08em;
-  color: $color-primary;
+  color: var(--sy-accent);
   opacity: 0;
   transform: translateY(4px);
   transition:
@@ -1590,7 +1795,7 @@ watch(
   }
 
   &--danger {
-    border-color: rgba(140, 31, 40, 0.35);
+    border-color: rgba(122, 26, 34, 0.35);
 
     &:hover {
       border-color: $color-primary;
@@ -1612,9 +1817,9 @@ watch(
 .ccard {
   @include hover-lift;
   overflow: hidden;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(var(--sy-surface-rgb), 0.66);
   box-shadow: $shadow-md;
   cursor: pointer;
 
@@ -1650,7 +1855,7 @@ watch(
   border-radius: 50%;
   background: rgba(14, 42, 71, 0.5);
   backdrop-filter: blur(6px);
-  font-size: 15px;
+  font-size: 22.5px;
   color: #e2666f;
   opacity: 0;
   transition:
@@ -1658,7 +1863,7 @@ watch(
     background-color $duration-fast $ease-out-expo;
 
   &:hover {
-    background: rgba(140, 31, 40, 0.92);
+    background: rgba(122, 26, 34, 0.92);
     color: #fff;
   }
 }
@@ -1673,20 +1878,20 @@ watch(
 .ccard__name {
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(15px, 1.3vw, 18px);
+  font-size: clamp(22.5px, 1.95vw, 27px);
   letter-spacing: 0.06em;
   color: $color-text-dark;
   @include text-ellipsis(1);
 }
 
 .ccard__meta {
-  font-size: 12px;
-  color: rgba(26, 26, 26, 0.55);
+  font-size: 18px;
+  color: rgba(var(--sy-text-rgb), 0.55);
 }
 
 .ccard__score {
   font-family: $font-en;
-  font-size: 13px;
+  font-size: 19.5px;
   color: $color-gold;
 }
 
@@ -1703,7 +1908,7 @@ watch(
   margin-bottom: 12px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   letter-spacing: 0.14em;
   color: $color-gold;
 }
@@ -1720,7 +1925,7 @@ watch(
     bottom: 6px;
     left: 13px;
     width: 1px;
-    background: linear-gradient(180deg, rgba(201, 168, 106, 0.6), rgba(201, 168, 106, 0.1));
+    background: linear-gradient(180deg, rgba(212, 179, 116, 0.6), rgba(212, 179, 116, 0.1));
   }
 }
 
@@ -1747,7 +1952,7 @@ watch(
 
 .foot__item:first-child .foot__node {
   background: $color-gold;
-  box-shadow: 0 0 0 4px rgba(201, 168, 106, 0.2);
+  box-shadow: 0 0 0 4px rgba(212, 179, 116, 0.2);
 }
 
 .foot__card {
@@ -1756,9 +1961,9 @@ watch(
   align-items: center;
   gap: 14px;
   padding: 10px 14px;
-  border: 1px solid rgba(201, 168, 106, 0.3);
+  border: 1px solid rgba(212, 179, 116, 0.3);
   border-radius: $radius-md;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(var(--sy-surface-rgb), 0.66);
   text-align: left;
   transition:
     border-color $duration-normal $ease-out-expo,
@@ -1777,7 +1982,7 @@ watch(
   height: 56px;
   flex-shrink: 0;
   object-fit: cover;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-md;
 }
 
@@ -1790,20 +1995,20 @@ watch(
   b {
     font-family: $font-title;
     font-weight: 900;
-    font-size: $fs-small;
+    font-size: calc(#{$fs-small} * 1.5);
     color: $color-text-dark;
     @include text-ellipsis(1);
   }
 
   em {
     font-style: normal;
-    font-size: 12px;
-    color: rgba(26, 26, 26, 0.5);
+    font-size: 18px;
+    color: rgba(var(--sy-text-rgb), 0.5);
   }
 
   i {
     font-style: normal;
-    font-size: 11px;
+    font-size: 16.5px;
     color: $color-gold;
   }
 }
@@ -1815,11 +2020,11 @@ watch(
 
 .foot__del {
   flex-shrink: 0;
-  font-size: 12px;
-  color: rgba(26, 26, 26, 0.45);
+  font-size: 18px;
+  color: rgba(var(--sy-text-rgb), 0.45);
 
   &:hover {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 }
 
@@ -1836,16 +2041,16 @@ watch(
   padding: 12px 16px;
   border: 1px solid $color-border-gold;
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(var(--sy-surface-rgb), 0.6);
 }
 
 .note-bar__stat {
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.6);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.6);
 
   b {
     font-family: $font-en;
-    font-size: 17px;
+    font-size: 25.5px;
     color: $color-gold;
   }
 }
@@ -1862,12 +2067,12 @@ watch(
     border: none;
     background: transparent;
     font-family: $font-body;
-    font-size: $fs-small;
+    font-size: calc(#{$fs-small} * 1.5);
     color: $color-text-dark;
     caret-color: $color-gold;
 
     &::placeholder {
-      color: rgba(26, 26, 26, 0.35);
+      color: rgba(var(--sy-text-rgb), 0.35);
     }
   }
 
@@ -1877,7 +2082,7 @@ watch(
     bottom: 0;
     left: 0;
     height: 1px;
-    background: rgba(140, 31, 40, 0.25);
+    background: rgba(122, 26, 34, 0.25);
     transition: background-color $duration-normal $ease-out-expo;
   }
 
@@ -1898,9 +2103,9 @@ watch(
   flex-direction: column;
   gap: 10px;
   padding: 22px 18px 16px;
-  border: 1px solid rgba(201, 168, 106, 0.42);
+  border: 1px solid rgba(212, 179, 116, 0.42);
   border-radius: $radius-md;
-  background: linear-gradient(180deg, #fffdf7, #f6f1e4);
+  background: linear-gradient(180deg, rgba(var(--sy-surface-rgb), 1), rgba(var(--sy-paper-rgb), 1));
   box-shadow: $shadow-sm;
   cursor: pointer;
   transition:
@@ -1948,7 +2153,7 @@ watch(
 .note__title {
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(15px, 1.3vw, 18px);
+  font-size: clamp(22.5px, 1.95vw, 27px);
   letter-spacing: 0.06em;
   color: $color-ink;
   @include text-ellipsis(1);
@@ -1956,9 +2161,9 @@ watch(
 
 .note__content {
   font-family: $font-body;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   line-height: 1.9;
-  color: rgba(26, 26, 26, 0.72);
+  color: rgba(var(--sy-text-rgb), 0.72);
   @include text-ellipsis(5);
 
   :deep(p) {
@@ -1979,9 +2184,9 @@ watch(
 
 .note__tag {
   padding: 2px 10px;
-  border: 1px solid rgba(201, 168, 106, 0.5);
+  border: 1px solid rgba(212, 179, 116, 0.5);
   border-radius: $radius-pill;
-  font-size: 11px;
+  font-size: 16.5px;
   color: $color-bamboo;
 }
 
@@ -1991,9 +2196,9 @@ watch(
   justify-content: space-between;
   gap: 10px;
   padding-top: 10px;
-  border-top: 1px dashed rgba(140, 31, 40, 0.15);
-  font-size: 11px;
-  color: rgba(26, 26, 26, 0.45);
+  border-top: 1px dashed rgba(122, 26, 34, 0.15);
+  font-size: 16.5px;
+  color: rgba(var(--sy-text-rgb), 0.45);
 }
 
 .note__linked {
@@ -2004,13 +2209,13 @@ watch(
   position: absolute;
   top: 12px;
   right: 12px;
-  font-size: 12px;
-  color: rgba(26, 26, 26, 0.45);
+  font-size: 18px;
+  color: rgba(var(--sy-text-rgb), 0.45);
   opacity: 0;
   transition: opacity $duration-normal $ease-out-expo;
 
   &:hover {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 }
 
@@ -2021,7 +2226,7 @@ watch(
   padding: clamp(16px, 1.8vw, 24px);
   border: 1px solid $color-border-gold;
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(var(--sy-surface-rgb), 0.66);
   box-shadow: $shadow-md;
 
   & + & {
@@ -2035,9 +2240,9 @@ watch(
   padding-left: 14px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(14px, 1.2vw, 17px);
+  font-size: clamp(21px, 1.8vw, 25.5px);
   letter-spacing: 0.12em;
-  color: $color-primary;
+  color: var(--sy-accent);
 
   &::before {
     content: '';
@@ -2052,8 +2257,8 @@ watch(
 
 .set-block__tip {
   margin-bottom: 14px;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.55);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.55);
 }
 
 .set-row {
@@ -2063,22 +2268,22 @@ watch(
   padding: 12px 0;
 
   & + & {
-    border-top: 1px dashed rgba(140, 31, 40, 0.12);
+    border-top: 1px dashed rgba(122, 26, 34, 0.12);
   }
 }
 
 .set-row__label {
   width: 72px;
   flex-shrink: 0;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   letter-spacing: 0.1em;
   color: $color-gold;
 }
 
 .set-row__value {
   font-family: $font-body;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.8);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.8);
 }
 
 .set-form {
@@ -2094,7 +2299,7 @@ watch(
   border-radius: $radius-pill;
   background: linear-gradient(120deg, #c0392b, #8e1f16);
   font-family: $font-body;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   letter-spacing: 0.12em;
   color: #fff;
   transition:
@@ -2129,8 +2334,8 @@ watch(
   align-items: center;
   justify-content: space-between;
   margin-top: 6px;
-  font-size: $fs-small;
-  color: $color-primary;
+  font-size: calc(#{$fs-small} * 1.5);
+  color: var(--sy-accent);
 }
 
 .trip-form__day {
@@ -2139,13 +2344,13 @@ watch(
   gap: 8px;
   align-items: center;
   padding: 10px;
-  border: 1px dashed rgba(201, 168, 106, 0.5);
+  border: 1px dashed rgba(212, 179, 116, 0.5);
   border-radius: $radius-md;
 }
 
 .trip-form__day-no {
   font-family: $font-en;
-  font-size: 13px;
+  font-size: 19.5px;
   color: $color-gold;
 }
 
@@ -2154,10 +2359,10 @@ watch(
   z-index: 1;
   border: 1px solid $color-border-gold;
   border-radius: $radius-md;
-  background: #fff;
+  background: rgba(var(--sy-surface-rgb), 1);
 
   :deep(.w-e-toolbar) {
-    border-bottom: 1px solid rgba(201, 168, 106, 0.3);
+    border-bottom: 1px solid rgba(212, 179, 116, 0.3);
   }
 
   :deep(.w-e-text-container) {
@@ -2222,7 +2427,7 @@ watch(
   }
 
   .pf-stats__item:nth-child(n + 3) {
-    border-top: 1px solid rgba(201, 168, 106, 0.28);
+    border-top: 1px solid rgba(212, 179, 116, 0.28);
   }
 
   .pf-hero__collage {
@@ -2239,6 +2444,85 @@ watch(
     align-items: flex-start;
     flex-direction: column;
     gap: 8px;
+  }
+
+  /* 小屏：主体纵向排列，侧边栏改为抽屉 */
+  .pf-body {
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .pf-side-trigger {
+    display: inline-flex;
+  }
+
+  .pf-side {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: $z-header + 2;
+    width: 260px;
+    padding: 20px 12px;
+    transform: translateX(-100%);
+    transition: transform $duration-fast $ease-out-expo;
+    background: rgba(14, 42, 71, 0.92);
+    backdrop-filter: blur(16px);
+
+    &::after {
+      display: none;
+    }
+
+    .pf-menu {
+      border-color: rgba(212, 179, 116, 0.3);
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .pf-menu__item {
+      color: rgba(245, 241, 232, 0.9);
+
+      &:hover {
+        background: rgba(212, 179, 116, 0.16);
+        color: $color-gold;
+      }
+    }
+
+    .pf-menu__icon {
+      color: rgba(245, 241, 232, 0.72);
+    }
+  }
+
+  /* 小屏下即使折匉也强制展开显示（抽屉需完整） */
+  .pf-side.is-collapsed {
+    width: 260px;
+
+    .pf-menu__label,
+    .pf-menu__arrow {
+      display: flex;
+    }
+
+    .pf-menu__item {
+      justify-content: flex-start;
+      padding: 12px 14px;
+    }
+  }
+
+  .pf-side__toggle {
+    display: none;
+  }
+
+  .pf-body.is-mobile-open .pf-side {
+    transform: translateX(0);
+  }
+
+  .pf-body.is-mobile-open .pf-side-mask {
+    position: fixed;
+    inset: 0;
+    z-index: $z-header + 1;
+    display: block;
+    background: rgba(8, 12, 18, 0.5);
+    backdrop-filter: blur(2px);
   }
 }
 </style>

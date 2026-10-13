@@ -16,8 +16,10 @@ import { useRoute, useRouter } from 'vue-router'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
-import request from '@/api/request'
+import { listScenic, listCities, listAllCities, type ScenicSpotVO, type CityOption } from '@/api/scenic'
 import GoldButton from '@/components/common/GoldButton.vue'
+import StateBlock from '@/components/common/StateBlock.vue'
+import Pagination from '@/components/common/Pagination.vue'
 import { t } from '@/i18n'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -25,23 +27,7 @@ gsap.registerPlugin(ScrollTrigger)
 /* ------------------------------------------------------------
  * 类型与常量
  * ---------------------------------------------------------- */
-interface ScenicItem {
-  id: number
-  name: string
-  cityId?: number
-  cityName?: string
-  type?: string
-  level?: string
-  coverImage?: string
-  description?: string
-  score?: number
-  tags?: string
-}
-
-interface CityItem {
-  id: number
-  name: string
-}
+// 类型统一来自 @/api/scenic（ScenicSpotVO / CityOption）
 
 /** 换成本地大图：/images/hero-jiuzhaigou.webp */
 const HERO_BG =
@@ -50,17 +36,16 @@ const HERO_BG_2X =
   'https://images.unsplash.com/photo-1508804185872-d7badad00f7d?auto=format&fit=crop&w=2560&q=80'
 
 /** 每页条数 */
-const PAGE_SIZE = 8
+const PAGE_SIZE = 12
 
-/** 类型胶囊：value 与 scenic_spot.type 真实取值一致，label 存 i18n key */
+/** 类型胶囊：value 与 scenic_spot.type 真实取值一致，label 直接展示中文 */
 const TYPES = [
-  { label: 'scenic.typeAll', value: '' },
-  { label: 'scenic.typeNature', value: '自然风光' },
-  { label: 'scenic.typeHuman', value: '人文古迹' },
-  { label: 'scenic.typeMuseum', value: '博物馆' },
-  { label: 'scenic.typeRed', value: '红色旅游' },
-  { label: 'scenic.typeFamily', value: '亲子' },
-  { label: 'scenic.typeTown', value: '古镇' },
+  { label: '全部', value: '' },
+  { label: '自然', value: '自然' },
+  { label: '人文', value: '人文' },
+  { label: '亲子', value: '亲子' },
+  { label: '红色', value: '红色' },
+  { label: '古镇', value: '古镇' },
 ]
 
 /** 排序方式 */
@@ -81,10 +66,17 @@ const filterEl = ref<HTMLElement | null>(null)
 const gridEl = ref<HTMLElement | null>(null)
 const cityDdEl = ref<HTMLElement | null>(null)
 
-const cities = ref<CityItem[]>([])
-const list = ref<ScenicItem[]>([])
+/** 城市名列表（下拉展示，来自 /scenic/cities） */
+const cityNames = ref<string[]>([])
+/** 市州 id/name（来自 /city/list，用于把城市名换算成后端支持的 cityId） */
+const cityOptions = ref<CityOption[]>([])
+const list = ref<ScenicSpotVO[]>([])
 const total = ref(0)
 const loading = ref(false)
+/** 接口是否加载失败 */
+const loadFailed = ref(false)
+/** 单张封面图加载失败的标记（按景点 id） */
+const imgFailed = ref<Record<number, boolean>>({})
 
 const query = reactive({
   page: 1,
@@ -92,6 +84,24 @@ const query = reactive({
   cityId: undefined as number | undefined,
   type: '',
   keyword: '',
+})
+
+/** 城市名 -> cityId */
+const cityIdByName = computed<Record<string, number>>(() => {
+  const map: Record<string, number> = {}
+  cityOptions.value.forEach((c) => {
+    map[c.name] = c.id
+  })
+  return map
+})
+
+/** cityId -> 城市名 */
+const cityNameById = computed<Record<number, string>>(() => {
+  const map: Record<number, string> = {}
+  cityOptions.value.forEach((c) => {
+    map[c.id] = c.name
+  })
+  return map
 })
 
 const sortKey = ref<'default' | 'score' | 'hot'>('default')
@@ -106,29 +116,13 @@ const cityLabel = computed(() => {
   if (query.cityId === undefined) {
     return t('scenic.allCities')
   }
-  return cities.value.find((c) => c.id === query.cityId)?.name ?? t('scenic.allCities')
+  return cityNameById.value[query.cityId] ?? t('scenic.allCities')
 })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / query.size)))
 
 /** 列表数据：排序已由后端按 sort 参数完成（hot=浏览量、score=评分、default=综合） */
 const displayList = computed(() => list.value)
-
-/** 分页页码（超出 7 页时用省略号收敛） */
-const pageList = computed<(number | 'gap')[]>(() => {
-  const last = totalPages.value
-  const cur = query.page
-  if (last <= 7) {
-    return Array.from({ length: last }, (_, i) => i + 1)
-  }
-  if (cur <= 4) {
-    return [1, 2, 3, 4, 5, 'gap', last]
-  }
-  if (cur >= last - 3) {
-    return [1, 'gap', last - 4, last - 3, last - 2, last - 1, last]
-  }
-  return [1, 'gap', cur - 1, cur, cur + 1, 'gap', last]
-})
 
 function splitTags(tags?: string) {
   return (tags || '')
@@ -142,47 +136,62 @@ function splitTags(tags?: string) {
  * ---------------------------------------------------------- */
 async function loadCities() {
   try {
-    const res = await request.get('/city/list', { silent: true })
-    if (Array.isArray(res.data)) {
-      cities.value = res.data
-    }
+    // 城市名（下拉展示）+ id/name 映射（把名称换算成后端支持的 cityId）
+    const [names, options] = await Promise.all([listCities(), listAllCities()])
+    cityNames.value = Array.isArray(names) ? names : []
+    cityOptions.value = Array.isArray(options) ? options : []
   } catch {
     // 忽略：城市下拉为空不影响其它筛选
   }
 }
 
+/** 待按名称解析的市州（用于 ?city=名称 兼容，城市列表加载后再换算） */
+let pendingCityName = ''
+
 /**
- * 应用地址栏参数：支持从顶部聚合搜索跳进来
- * （/scenic?keyword=九寨沟 、/scenic?cityId=1）
+ * 应用地址栏参数：支持从顶部聚合搜索 / 3D 地图跳进来
+ * （/scenic?keyword=九寨沟 、/scenic?cityId=1 、/scenic?city=成都 或 /scenic?cityName=成都）
  */
 function applyQueryParams() {
   const kw = route.query.keyword
   const cityId = route.query.cityId
+  const rawCity = route.query.cityName ?? route.query.city
+  const cityName = typeof rawCity === 'string' ? rawCity : undefined
   if (typeof kw === 'string' && kw) {
     query.keyword = kw
   }
   if (typeof cityId === 'string' && cityId) {
     query.cityId = Number(cityId) || undefined
+    pendingCityName = ''
+  } else if (typeof cityName === 'string' && cityName) {
+    // 兼容市州名称参数：城市列表可能尚未加载，先记下待换算
+    const id = cityIdByName.value[cityName]
+    if (id) {
+      query.cityId = id
+      pendingCityName = ''
+    } else {
+      pendingCityName = cityName
+      query.cityId = undefined
+    }
   }
 }
 
 async function loadList() {
   loading.value = true
+  loadFailed.value = false
   try {
-    const res = await request.get('/scenic/list', {
-      silent: true,
-      params: {
-        page: query.page,
-        size: query.size,
-        cityId: query.cityId || undefined,
-        type: query.type || undefined,
-        keyword: query.keyword || undefined,
-        sort: sortKey.value,
-      },
+    const data = await listScenic({
+      page: query.page,
+      size: query.size,
+      cityId: query.cityId ?? undefined,
+      type: query.type || undefined,
+      keyword: query.keyword || undefined,
+      sort: sortKey.value,
     })
-    list.value = res.data?.records ?? []
-    total.value = res.data?.total ?? 0
+    list.value = data?.records ?? []
+    total.value = data?.total ?? 0
   } catch {
+    loadFailed.value = true
     list.value = []
     total.value = 0
   } finally {
@@ -217,11 +226,16 @@ async function reload(animate = true) {
 /* ------------------------------------------------------------
  * 筛选交互
  * ---------------------------------------------------------- */
-function selectCity(id: number | undefined) {
-  query.cityId = id
+function selectCityByName(name?: string) {
+  query.cityId = name ? cityIdByName.value[name] : undefined
   query.page = 1
   cityOpen.value = false
   reload()
+}
+
+/** 封面图加载失败：切纯色占位 */
+function onImgError(item: ScenicSpotVO) {
+  imgFailed.value = { ...imgFailed.value, [item.id]: true }
 }
 
 function selectType(value: string) {
@@ -304,14 +318,7 @@ function bindLazy() {
         }
         const card = entry.target as HTMLElement
 
-        // 1) 懒加载封面
-        const img = card.querySelector<HTMLImageElement>('img[data-src]')
-        if (img?.dataset.src) {
-          img.src = img.dataset.src
-          img.removeAttribute('data-src')
-        }
-
-        // 2) 逐个淡入：每张延迟 80ms
+        // 逐个淡入：每张延迟 80ms（封面图走原生 loading="lazy"）
         gsap.to(card, {
           opacity: 1,
           y: 0,
@@ -360,6 +367,15 @@ onMounted(async () => {
 
   // 数据
   await Promise.all([loadCities(), loadList()])
+  // ?city=名称 兼容：城市列表就绪后换算成 cityId 并补拉一次
+  if (pendingCityName) {
+    const id = cityIdByName.value[pendingCityName]
+    pendingCityName = ''
+    if (id) {
+      query.cityId = id
+      await loadList()
+    }
+  }
   await nextTick()
   bindLazy()
 
@@ -470,18 +486,18 @@ watch(
               <li
                 class="dropdown__option"
                 :class="{ 'is-active': query.cityId === undefined }"
-                @click="selectCity(undefined)"
+                @click="selectCityByName()"
               >
                 {{ t('scenic.allCities') }}
               </li>
               <li
-                v-for="c in cities"
-                :key="c.id"
+                v-for="name in cityNames"
+                :key="name"
                 class="dropdown__option"
-                :class="{ 'is-active': query.cityId === c.id }"
-                @click="selectCity(c.id)"
+                :class="{ 'is-active': query.cityId === cityIdByName[name] }"
+                @click="selectCityByName(name)"
               >
-                {{ c.name }}
+                {{ name }}
               </li>
             </ul>
           </transition>
@@ -497,7 +513,7 @@ watch(
             :class="{ 'is-active': query.type === type.value }"
             @click="selectType(type.value)"
           >
-            {{ t(type.label) }}
+            {{ type.label }}
           </button>
         </div>
 
@@ -555,7 +571,10 @@ watch(
         </p>
       </div>
 
-      <div ref="gridEl" v-loading="loading" class="scenic-grid">
+      <!-- 加载中 -->
+      <StateBlock v-if="loading" state="loading" />
+
+      <div v-if="!loading" ref="gridEl" class="scenic-grid">
         <article
           v-for="(item, i) in displayList"
           :key="item.id"
@@ -567,12 +586,17 @@ watch(
           <!-- 封面 4:3 -->
           <div class="scenic-card__cover">
             <img
+              v-if="item.coverImage && !imgFailed[item.id]"
               class="scenic-card__img"
-              :data-src="item.coverImage"
-              alt=""
+              :src="item.coverImage"
+              :alt="item.name"
               loading="lazy"
               decoding="async"
+              @error="onImgError(item)"
             />
+            <div v-else class="scenic-card__img scenic-card__img--fallback">
+              {{ (item.name || '蜀').slice(0, 1) }}
+            </div>
             <span v-if="item.level" class="scenic-card__level">{{ item.level }}</span>
 
             <!-- hover：查看详情 -->
@@ -617,75 +641,24 @@ watch(
               <span v-for="t in splitTags(item.tags)" :key="t" class="scenic-card__tag">{{ t }}</span>
             </div>
 
-            <p class="scenic-card__desc">{{ item.description }}</p>
+            <p class="scenic-card__desc">{{ item.recommendReason || item.description || '—' }}</p>
           </div>
         </article>
       </div>
 
-      <!-- ================= 5. 空状态 ================= -->
-      <div v-if="!loading && !displayList.length" class="scenic-empty">
-        <div class="scenic-empty__mark"><span>蜀</span></div>
-        <p class="scenic-empty__text">{{ t('scenic.empty') }}</p>
-        <GoldButton @click="onReset">{{ t('scenic.reset') }}</GoldButton>
-      </div>
+      <!-- ================= 5. 加载失败 / 空状态 ================= -->
+      <StateBlock v-if="!loading && loadFailed" state="error" :retry="() => reload(false)" />
 
-      <!-- ================= 4. 自定义分页 ================= -->
-      <nav v-if="totalPages > 1" class="scenic-pager" :aria-label="t('scenic.pagerAria')">
-        <button
-          type="button"
-          class="scenic-pager__arrow"
-          :disabled="query.page <= 1"
-          :aria-label="t('scenic.prevPage')"
-          @click="goPage(query.page - 1)"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M15 6l-6 6 6 6" />
-          </svg>
-        </button>
+      <StateBlock
+        v-if="!loading && !loadFailed && !displayList.length"
+        state="empty"
+        empty-text="暂无符合条件的景点"
+        action-text="重置筛选"
+        :action="onReset"
+      />
 
-        <template v-for="(p, i) in pageList" :key="`${p}-${i}`">
-          <span v-if="p === 'gap'" class="scenic-pager__gap">…</span>
-          <button
-            v-else
-            type="button"
-            class="scenic-pager__num"
-            :class="{ 'is-active': p === query.page }"
-            @click="goPage(p)"
-          >
-            {{ p }}
-          </button>
-        </template>
-
-        <button
-          type="button"
-          class="scenic-pager__arrow"
-          :disabled="query.page >= totalPages"
-          :aria-label="t('scenic.nextPage')"
-          @click="goPage(query.page + 1)"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="16"
-            height="16"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        </button>
-      </nav>
+      <!-- ================= 4. 分页 ================= -->
+      <Pagination :page="query.page" :total="total" :size="query.size" @update:page="goPage" />
     </div>
 
     <!-- ================= 小屏筛选抽屉 ================= -->
@@ -704,19 +677,19 @@ watch(
                 type="button"
                 class="pill"
                 :class="{ 'is-active': query.cityId === undefined }"
-                @click="selectCity(undefined)"
+                @click="selectCityByName()"
               >
                 全部
               </button>
               <button
-                v-for="c in cities"
-                :key="c.id"
+                v-for="name in cityNames"
+                :key="name"
                 type="button"
                 class="pill"
-                :class="{ 'is-active': query.cityId === c.id }"
-                @click="selectCity(c.id)"
+                :class="{ 'is-active': query.cityId === cityIdByName[name] }"
+                @click="selectCityByName(name)"
               >
-                {{ c.name }}
+                {{ name }}
               </button>
             </div>
           </div>
@@ -725,14 +698,14 @@ watch(
             <p class="scenic-drawer__label">{{ t('scenic.typeLabel') }}</p>
             <div class="pills pills--wrap">
               <button
-                v-for="t in TYPES"
-                :key="t.value"
+                v-for="type in TYPES"
+                :key="type.value"
                 type="button"
                 class="pill"
-                :class="{ 'is-active': query.type === t.value }"
-                @click="selectType(t.value)"
+                :class="{ 'is-active': query.type === type.value }"
+                @click="selectType(type.value)"
               >
-                {{ t.label }}
+                {{ type.label }}
               </button>
             </div>
           </div>
@@ -776,7 +749,7 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 45vh;
+  min-height: $hero-list-height;
   overflow: hidden;
   isolation: isolate;
 }
@@ -832,14 +805,26 @@ watch(
 
 /* 大标题：艺术化排版（后半句金色描边） */
 .scenic-hero__title {
+  position: relative;
   margin-top: clamp(16px, 2.4vh, 30px);
   font-family: $font-title;
   font-weight: 900;
-  font-size: $fs-hero;
+  font-size: clamp(96px, 8vw, 140px);
   line-height: 1;
   letter-spacing: -0.02em;
   color: $color-text-light;
   text-shadow: $shadow-text;
+
+  // 主标题下方金色细线装饰
+  &::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    bottom: -16px;
+    width: clamp(80px, 10vw, 220px);
+    height: 2px;
+    background: linear-gradient(90deg, $color-gold, rgba(212, 179, 116, 0));
+  }
 
   span {
     display: inline-block;
@@ -853,7 +838,7 @@ watch(
 .scenic-hero__sub {
   margin-top: clamp(14px, 2vh, 26px);
   font-family: $font-body;
-  font-size: clamp(15px, 1.4vw, 22px);
+  font-size: 20px;
   letter-spacing: 0.3em;
   color: rgba(245, 241, 232, 0.88);
   text-shadow: $shadow-text-soft;
@@ -864,20 +849,21 @@ watch(
  * ========================================================== */
 .scenic-filter {
   position: sticky;
-  top: 68px; // 让开固定导航栏
+  top: $nav-height; // 让开固定导航栏
   z-index: $z-header - 1;
+  margin-top: 40px;
   border-bottom: 1px solid transparent;
   transition:
     background-color $duration-normal $ease-out-expo,
     border-color $duration-normal $ease-out-expo,
     box-shadow $duration-normal $ease-out-expo;
 
-  @include glass(rgba(232, 227, 216, 0.6), 18px);
+  @include glass(rgba(var(--sy-paper-rgb), 0.6), 18px);
 
   &.is-stuck {
-    border-bottom-color: rgba(201, 168, 106, 0.42);
+    border-bottom-color: rgba(212, 179, 116, 0.42);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-    background: rgba(232, 227, 216, 0.85);
+    background: rgba(var(--sy-paper-rgb), 0.85);
   }
 }
 
@@ -886,7 +872,8 @@ watch(
   flex-wrap: wrap;
   align-items: center;
   gap: clamp(12px, 1.6vw, 26px);
-  padding-block: clamp(12px, 1.4vw, 20px);
+  min-height: 104px;
+  padding-block: clamp(20px, 2.2vw, 30px);
 }
 
 /* 自定义下拉 */
@@ -901,13 +888,15 @@ watch(
   justify-content: space-between;
   gap: 12px;
   width: 100%;
-  padding: 11px 16px;
-  border-radius: $radius-pill;
-  @include gold-border(0.45);
-  background: rgba(255, 255, 255, 0.5);
+  height: 60px;
+  padding: 0 28px;
+  border: 1px solid var(--sy-border);
+  border-radius: 10px;
+  background: rgba(var(--sy-surface-rgb), 0.92);
+  box-shadow: $shadow-sm;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.1em;
+  font-size: 26px;
+  letter-spacing: 0.04em;
   color: $color-text-dark;
   transition:
     border-color $duration-fast $ease-out-expo,
@@ -938,26 +927,26 @@ watch(
   padding: 8px;
   border-radius: $radius-lg;
   @include gold-border(0.42);
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(var(--sy-surface-rgb), 0.92);
   backdrop-filter: blur(14px);
   box-shadow: $shadow-lg;
 }
 
 .dropdown__option {
-  padding: 9px 14px;
+  padding: 14px 20px;
   border-radius: $radius-md;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.06em;
-  color: rgba(26, 26, 26, 0.78);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  color: rgba(var(--sy-text-rgb), 0.78);
   cursor: pointer;
   transition:
     background-color $duration-fast $ease-out-expo,
     color $duration-fast $ease-out-expo;
 
   &:hover {
-    background: rgba(140, 31, 40, 0.07);
-    color: $color-primary;
+    background: rgba(122, 26, 34, 0.07);
+    color: var(--sy-accent);
   }
 
   &.is-active {
@@ -992,14 +981,17 @@ watch(
 }
 
 .pill {
-  padding: 9px 20px;
+  display: inline-flex;
+  align-items: center;
+  height: 60px;
+  padding: 0 30px;
   border-radius: $radius-pill;
-  border: 1px solid rgba(140, 31, 40, 0.22);
+  border: 1px solid rgba(122, 26, 34, 0.22);
   background: transparent;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.1em;
-  color: rgba(26, 26, 26, 0.78);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  color: rgba(var(--sy-text-rgb), 0.78);
   transition:
     background-color $duration-normal $ease-out-expo,
     border-color $duration-normal $ease-out-expo,
@@ -1008,7 +1000,7 @@ watch(
 
   &:hover {
     border-color: $color-gold;
-    color: $color-primary;
+    color: var(--sy-accent);
     transform: translateY(-2px);
   }
 
@@ -1024,10 +1016,29 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  min-width: 200px;
-  flex: 1 1 200px;
-  max-width: 320px;
-  padding: 8px 2px;
+  gap: 12px;
+  min-width: 360px;
+  flex: 1 1 360px;
+  max-width: 640px;
+  height: 60px;
+  padding: 0 26px;
+  border: 1px solid rgba(212, 179, 116, 0.45);
+  border-radius: 14px;
+  background: rgba(var(--sy-surface-rgb), 0.9);
+  box-shadow: 0 6px 18px rgba(14, 42, 71, 0.05);
+  transition:
+    border-color $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo;
+
+  &:focus-within {
+    border-color: $color-gold;
+    box-shadow: 0 10px 26px rgba(212, 179, 116, 0.2);
+  }
+
+  // 方框搜索不再需要下划线
+  .usearch__line {
+    display: none;
+  }
 }
 
 .usearch__input {
@@ -1036,12 +1047,12 @@ watch(
   border: none;
   background: transparent;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.08em;
+  font-size: 26px;
+  letter-spacing: 0.04em;
   color: $color-text-dark;
 
   &::placeholder {
-    color: rgba(26, 26, 26, 0.4);
+    color: rgba(var(--sy-text-rgb), 0.4);
   }
 }
 
@@ -1050,8 +1061,8 @@ watch(
   left: 0;
   bottom: 0;
   width: 100%;
-  height: 1px;
-  background: rgba(140, 31, 40, 0.28);
+  height: 1.5px;
+  background: $color-gold;
   transform-origin: left;
   transition:
     background-color $duration-normal $ease-out-expo,
@@ -1061,23 +1072,23 @@ watch(
 .usearch:focus-within .usearch__line {
   background: $color-gold;
   transform: scaleX(1.04);
-  box-shadow: 0 1px 8px rgba(201, 168, 106, 0.6);
+  box-shadow: 0 1px 8px rgba(212, 179, 116, 0.6);
 }
 
 /* 排序 */
 .sorts {
   display: flex;
   align-items: center;
-  gap: clamp(10px, 1.2vw, 20px);
+  gap: clamp(14px, 1.6vw, 30px);
 }
 
 .sorts__item {
   position: relative;
-  padding-bottom: 3px;
+  padding-bottom: 4px;
   font-family: $font-body;
-  font-size: $fs-small;
-  letter-spacing: 0.12em;
-  color: rgba(26, 26, 26, 0.6);
+  font-size: 26px;
+  letter-spacing: 0.04em;
+  color: rgba(var(--sy-text-rgb), 0.6);
   transition: color $duration-fast $ease-out-expo;
 
   &::after {
@@ -1094,11 +1105,11 @@ watch(
   }
 
   &:hover {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 
   &.is-active {
-    color: $color-primary;
+    color: var(--sy-accent);
 
     &::after {
       transform: scaleX(1);
@@ -1117,7 +1128,7 @@ watch(
   font-family: $font-body;
   font-size: $fs-small;
   letter-spacing: 0.1em;
-  color: $color-primary;
+  color: var(--sy-accent);
 }
 
 /* ============================================================
@@ -1133,8 +1144,8 @@ watch(
 
 .scenic-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: clamp(18px, 2vw, 30px);
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 24px;
   min-height: 200px;
 }
 
@@ -1142,10 +1153,11 @@ watch(
   @include hover-lift;
   display: flex;
   flex-direction: column;
+  min-height: 380px;
   overflow: hidden;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(var(--sy-surface-rgb), 0.62);
   box-shadow: $shadow-md;
   cursor: pointer;
 
@@ -1160,7 +1172,7 @@ watch(
     }
 
     .scenic-card__name {
-      color: $color-primary;
+      color: var(--sy-accent);
     }
   }
 }
@@ -1170,7 +1182,7 @@ watch(
   position: relative;
   aspect-ratio: 4 / 3;
   overflow: hidden;
-  background: linear-gradient(135deg, rgba(14, 42, 71, 0.12), rgba(140, 31, 40, 0.12));
+  background: linear-gradient(135deg, rgba(14, 42, 71, 0.12), rgba(122, 26, 34, 0.12));
 }
 
 .scenic-card__img {
@@ -1180,16 +1192,27 @@ watch(
   transition: transform 1s $ease-out-expo;
 }
 
+/* 封面加载失败：纯色占位（首字） */
+.scenic-card__img--fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, $color-primary, #6e141c);
+  color: $color-gold;
+  font-family: $font-title;
+  font-size: 2rem;
+}
+
 .scenic-card__level {
   position: absolute;
   top: 12px;
   left: 12px;
-  padding: 4px 13px;
+  padding: 5px 15px;
   border-radius: $radius-pill;
   background: rgba(14, 42, 71, 0.72);
   backdrop-filter: blur(6px);
-  font-size: 12px;
-  letter-spacing: 0.08em;
+  font-size: 16px;
+  letter-spacing: 0.06em;
   color: $color-gold;
 }
 
@@ -1211,15 +1234,15 @@ watch(
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 9px;
-  padding: clamp(16px, 1.8vw, 24px);
+  gap: 12px;
+  padding: 32px;
 }
 
 .scenic-card__name {
   font-family: $font-title;
-  font-weight: 900;
-  font-size: clamp(17px, 1.5vw, 22px);
-  letter-spacing: 0.08em;
+  font-weight: 700;
+  font-size: 28px;
+  letter-spacing: 0.04em;
   color: $color-text-dark;
   transition: color $duration-normal $ease-out-expo;
 }
@@ -1230,8 +1253,8 @@ watch(
   justify-content: space-between;
   gap: 10px;
   font-family: $font-body;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.55);
+  font-size: 16px;
+  color: rgba(var(--sy-text-rgb), 0.55);
 }
 
 .scenic-card__score {
@@ -1250,10 +1273,10 @@ watch(
 }
 
 .scenic-card__tag {
-  padding: 3px 10px;
-  border: 1px solid rgba(201, 168, 106, 0.5);
+  padding: 4px 12px;
+  border: 1px solid rgba(212, 179, 116, 0.5);
   border-radius: $radius-sm;
-  font-size: 12px;
+  font-size: 14px;
   letter-spacing: 0.08em;
   color: $color-bamboo;
 }
@@ -1261,9 +1284,9 @@ watch(
 .scenic-card__desc {
   margin-top: auto;
   font-family: $font-body;
-  font-size: $fs-small;
-  line-height: 1.85;
-  color: rgba(26, 26, 26, 0.66);
+  font-size: 16px;
+  line-height: 1.7;
+  color: rgba(var(--sy-text-rgb), 0.66);
   @include text-ellipsis(2);
 }
 
@@ -1283,7 +1306,7 @@ watch(
   padding: 4px 2px;
   font-family: $font-en;
   font-size: clamp(15px, 1.3vw, 19px);
-  color: rgba(26, 26, 26, 0.55);
+  color: rgba(var(--sy-text-rgb), 0.55);
   transition: color $duration-fast $ease-out-expo;
 
   &::after {
@@ -1300,7 +1323,7 @@ watch(
   }
 
   &:hover {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 
   &.is-active {
@@ -1315,7 +1338,7 @@ watch(
 .scenic-pager__gap {
   font-family: $font-en;
   font-size: clamp(15px, 1.3vw, 19px);
-  color: rgba(26, 26, 26, 0.35);
+  color: rgba(var(--sy-text-rgb), 0.35);
 }
 
 .scenic-pager__arrow {
@@ -1324,7 +1347,7 @@ watch(
   height: 40px;
   border-radius: 50%;
   @include gold-border(0.5);
-  color: $color-primary;
+  color: var(--sy-accent);
   transition:
     background-color $duration-normal $ease-out-expo,
     color $duration-normal $ease-out-expo,
@@ -1357,8 +1380,8 @@ watch(
   @include flex-center;
   width: clamp(72px, 8vw, 104px);
   height: clamp(72px, 8vw, 104px);
-  border: 1px solid rgba(201, 168, 106, 0.6);
-  background-color: rgba(201, 168, 106, 0.08);
+  border: 1px solid rgba(212, 179, 116, 0.6);
+  background-color: rgba(212, 179, 116, 0.08);
   background-image: $pattern-brocade;
   animation: empty-spin 8s linear infinite;
 
@@ -1385,7 +1408,7 @@ watch(
   font-family: $font-title;
   font-size: clamp(16px, 1.4vw, 22px);
   letter-spacing: 0.14em;
-  color: rgba(26, 26, 26, 0.6);
+  color: rgba(var(--sy-text-rgb), 0.6);
 }
 
 /* ============================================================
@@ -1423,14 +1446,14 @@ watch(
     font-weight: 900;
     font-size: clamp(18px, 4vw, 22px);
     letter-spacing: 0.12em;
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 }
 
 .scenic-drawer__close {
   font-size: $fs-small;
   letter-spacing: 0.12em;
-  color: rgba(26, 26, 26, 0.6);
+  color: rgba(var(--sy-text-rgb), 0.6);
 }
 
 .scenic-drawer__label {
@@ -1447,7 +1470,7 @@ watch(
 .scenic-drawer__reset {
   font-size: $fs-small;
   letter-spacing: 0.12em;
-  color: $color-primary;
+  color: var(--sy-accent);
   text-decoration: underline;
   text-underline-offset: 4px;
 }

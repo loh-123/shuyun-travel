@@ -1,5 +1,6 @@
 server:
-  port: 8080
+  # 本地默认 8080；Render / Koyeb 等云平台通过 PORT 环境变量注入
+  port: ${PORT:8080}
 
 spring:
   application:
@@ -13,14 +14,36 @@ spring:
 
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://localhost:3306/shuyun?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: "123456"
+    # 本地默认连本机 MySQL；云端（TiDB Cloud 等）通过 MYSQL_URL 注入完整连接串
+    url: ${MYSQL_URL:jdbc:mysql://localhost:3306/shuyun?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:123456}
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      # 本地默认连本机 Redis；云端（Upstash 等）通过 REDIS_HOST/REDIS_PORT/REDIS_PASSWORD 注入
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      # Upstash 等托管 Redis 要求 TLS 连接：设置 REDIS_SSL=true 开启
+      ssl:
+        enabled: ${REDIS_SSL:false}
+
+  # 邮件发送（QQ 邮箱 SMTP）—— 授权码请通过环境变量 MAIL_PASSWORD 注入，勿提交明文
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml
@@ -28,5 +51,33 @@ mybatis-plus:
     map-underscore-to-camel-case: true
 
 shuyun:
-  # 上传文件保存目录（相对于启动目录），通过 /upload/** 静态访问
-  upload-dir: ./upload
+  # 上传文件保存目录（相对于启动目录），通过 /upload/** 静态访问；云端可用 UPLOAD_DIR 覆盖
+  upload-dir: ${UPLOAD_DIR:./upload}
+  # 外部访问基础地址：前后端分域部署时拼接上传文件绝对地址（如 https://api.zhixingwujie.top），本地留空返回相对路径
+  base-url: ${BASE_URL:}
+  # 邮件发送方地址（默认与 SMTP 登录账号一致）
+  mail:
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
+
+# 女娲智能体平台配置（AI 流式对话）
+nuwa:
+  # 运行模式：mock-模拟流式，real-接入女娲真实接口（默认 real）
+  mode: ${NUWA_MODE:real}
+  # 平台 API Key（**强烈建议**改用环境变量 NUWA_API_KEY 注入，勿提交到仓库）
+  api-key: ${NUWA_API_KEY:ak-3d976b2826704ce488984520f9b313b0}
+  # 平台基础地址
+  base-url: ${NUWA_BASE_URL:https://agent.nuwax.com}
+  # 智能体ID
+  agent-id: ${NUWA_AGENT_ID:33298480}
+  # 发起会话接口路径（返回 conversationId）
+  conversation-add-path: ${NUWA_CONVERSATION_ADD_PATH:/api/v1/chat/conversation/add}
+  # 发起会话（流式）路径前缀：实际请求 {chat-path}/{conversationId}
+  chat-path: ${NUWA_CHAT_PATH:/api/v1/chat}
+  # 请求超时时间（毫秒）
+  timeout: 60000
+  # 是否启用工具调用（Function Calling）；若平台不支持会自动降级为普通对话
+  tools-enabled: ${NUWA_TOOLS_ENABLED:true}
+  # 调用失败重试次数
+  retry-count: 2
+  # 单用户每分钟最大对话次数（Redis 计数）
+  rate-limit-per-minute: 10

@@ -13,10 +13,14 @@ import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 
 import request from '@/api/request'
+import { getCultureDetail, listCulture, type CultureDetailVO, type CultureVO } from '@/api/culture'
+import { listAllPerson, listPersonByCulture, type CulturePersonVO } from '@/api/person'
 import { useUserStore } from '@/stores/user'
 import GoldButton from '@/components/common/GoldButton.vue'
+import StateBlock from '@/components/common/StateBlock.vue'
 import CultureIcon from '@/components/common/CultureIcon.vue'
 import GhostButton from '@/components/common/GhostButton.vue'
+import PersonCards, { type PersonCardItem } from '@/components/common/PersonCards.vue'
 import { t } from '@/i18n'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -24,42 +28,7 @@ gsap.registerPlugin(ScrollTrigger)
 /* ------------------------------------------------------------
  * 类型
  * ---------------------------------------------------------- */
-interface RelatedScenic {
-  id: number
-  name: string
-  cityName?: string
-  type?: string
-  coverImage?: string
-  score?: number
-}
-
-interface Inheritor {
-  name: string
-  title: string
-  intro: string
-}
-
-interface CultureDetail {
-  id: number
-  name: string
-  category?: string
-  coverImage?: string
-  summary?: string
-  content?: string
-  videoUrl?: string
-  tags?: string
-  relatedScenics?: RelatedScenic[]
-  inheritors?: Inheritor[]
-}
-
-interface CultureItem {
-  id: number
-  name: string
-  category?: string
-  coverImage?: string
-  summary?: string
-  content?: string
-}
+// 类型统一来自 @/api/culture（CultureDetailVO / CultureVO）
 
 /* ------------------------------------------------------------
  * 状态
@@ -71,10 +40,16 @@ const userStore = useUserStore()
 const rootEl = ref<HTMLElement | null>(null)
 const heroEl = ref<HTMLElement | null>(null)
 
-const detail = ref<CultureDetail | null>(null)
-const all = ref<CultureItem[]>([])
+const detail = ref<CultureDetailVO | null>(null)
+const all = ref<CultureVO[]>([])
 const loading = ref(true)
 const notFound = ref(false)
+
+/** 相关传承人（按 culture_id 查询 culture_person 表） */
+const relatedPersons = ref<CulturePersonVO[]>([])
+
+/** 传承人姓名 -> id 映射（用于把纯文本人物名解析为可跳转的传承人） */
+const personMap = ref<Record<string, number>>({})
 
 /** 视频 Lightbox */
 const videoOpen = ref(false)
@@ -97,8 +72,46 @@ const tags = computed(() =>
     .filter(Boolean),
 )
 
-/** 正文中插入的配图：取关联景点的封面（最多 2 张） */
-const inlineFigures = computed(() => (detail.value?.relatedScenics ?? []).slice(0, 2))
+/** 图片集（已是 /images/culture/... 完整路径） */
+const cultureImages = computed(() => (detail.value?.images ?? []).filter(Boolean) as string[])
+
+/** 逗号分隔字符串 → 数组 */
+function splitList(text?: string) {
+  return (text || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+/** 相关景点（名称，来自 relatedScenic） */
+const relatedScenicList = computed(() => splitList(detail.value?.relatedScenic))
+/** 相关人物（来自 relatedPerson） */
+const relatedPersonList = computed(() => splitList(detail.value?.relatedPerson))
+
+/**
+ * 合并后的「相关人物 / 传承人」列表：
+ * 结构化传承人（culture_person 表，带头像 / 简介 / 可跳转）优先，
+ * 再补上纯文本的相关人物名（按姓名映射到传承人 id，便于点击查看详情），按姓名去重。
+ */
+const mergedPeople = computed<PersonCardItem[]>(() => {
+  const list: PersonCardItem[] = []
+  const seen = new Set<string>()
+  const push = (name: string, id?: number | null, avatar?: string, brief?: string) => {
+    const key = (name || '').trim()
+    if (!key || seen.has(key)) {
+      return
+    }
+    seen.add(key)
+    list.push({ id: id ?? personMap.value[key] ?? null, name: key, avatar, brief })
+  }
+  for (const p of relatedPersons.value) {
+    push(p.name, p.id, p.avatar, p.brief)
+  }
+  for (const name of relatedPersonList.value) {
+    push(name, null, undefined, '非遗传承人')
+  }
+  return list
+})
 
 /** 同分类的其他文化（最多 3 条） */
 const sameCategory = computed(() => {
@@ -109,24 +122,62 @@ const sameCategory = computed(() => {
   return all.value.filter((c) => c.category === cur.category && c.id !== cur.id).slice(0, 3)
 })
 
-/** 卡片简介：正文两段拼接（约 150 字，由 CSS 限 3 行） */
-function introOf(item: CultureItem) {
-  const text = (item.content || item.summary || '').replace(/\n/g, '')
-  return text || item.summary || ''
+/** 卡片简介：取 summary，截断 150 字 */
+function introOf(item: CultureVO) {
+  const text = (item.summary || '').replace(/\n/g, '')
+  return text.length > 150 ? `${text.slice(0, 150)}…` : text
 }
 
-/** video_url 是否为可内嵌地址（B站 player / YouTube embed） */
-const videoEmbeddable = computed(() =>
-  /player\.bilibili\.com|youtube\.com\/embed/.test(detail.value?.videoUrl || ''),
-)
+/**
+ * 视频嵌入地址：
+ * - 已是 player.bilibili.com / youtube embed → 原样
+ * - B站普通视频页 → https://player.bilibili.com/player.html?bvid=BVxxx
+ * - YouTube watch → embed
+ * - 其它 → 空（由调用方新窗口打开）
+ */
+const embedUrl = computed(() => {
+  const url = detail.value?.videoUrl || ''
+  if (!url) {
+    return ''
+  }
+  if (/player\.bilibili\.com|youtube\.com\/embed/.test(url)) {
+    return url
+  }
+  const bili = url.match(/bilibili\.com\/video\/(BV[0-9A-Za-z]+)/)
+  if (bili) {
+    return `https://player.bilibili.com/player.html?bvid=${bili[1]}&high_quality=1&danmaku=0`
+  }
+  const yt = url.match(/youtube\.com\/watch\?v=([\w-]+)/)
+  if (yt) {
+    return `https://www.youtube.com/embed/${yt[1]}`
+  }
+  return ''
+})
+
+/** 图片兜底占位图 */
+const IMG_FALLBACK =
+  'data:image/svg+xml;charset=utf-8,' +
+  encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="600" height="450"><rect width="100%" height="100%" fill="#F0EBE0"/><text x="50%" y="50%" fill="#D4B374" font-size="60" font-family="serif" text-anchor="middle" dominant-baseline="middle">蜀</text></svg>',
+  )
+
+/** 图片加载失败：换成占位图（每张只处理一次） */
+function onImgError(e: Event) {
+  const img = e.target as HTMLImageElement
+  if (!img || img.dataset.fallback === '1') {
+    return
+  }
+  img.dataset.fallback = '1'
+  img.src = IMG_FALLBACK
+}
 
 /* ------------------------------------------------------------
  * 数据
  * ---------------------------------------------------------- */
 async function loadAll() {
   try {
-    const res = await request.get('/culture/list', { silent: true })
-    all.value = Array.isArray(res.data) ? res.data : []
+    const data = await listCulture()
+    all.value = Array.isArray(data) ? data : []
   } catch {
     all.value = []
   }
@@ -136,17 +187,53 @@ async function loadDetail(id: number) {
   loading.value = true
   notFound.value = false
   try {
-    const res = await request.get(`/culture/${id}`, { silent: true })
-    detail.value = res.data ?? null
+    const data = await getCultureDetail(id)
+    detail.value = data ?? null
     notFound.value = !detail.value
     if (detail.value) {
       recordHistory()
+      await loadRelatedPersons()
     }
   } catch {
     detail.value = null
     notFound.value = true
   } finally {
     loading.value = false
+  }
+}
+
+/**
+ * 加载全部传承人并建立「姓名 -> id」映射，用于把纯文本人物名解析为可跳转的传承人
+ */
+async function loadPersonMap() {
+  try {
+    const list = await listAllPerson(200)
+    const map: Record<string, number> = {}
+    for (const p of Array.isArray(list) ? list : []) {
+      if (p?.name) {
+        map[p.name] = p.id
+      }
+    }
+    personMap.value = map
+  } catch {
+    personMap.value = {}
+  }
+}
+
+/**
+ * 加载同文化的传承人（culture_person 表），失败静默
+ */
+async function loadRelatedPersons() {
+  const id = detail.value?.id
+  if (!id) {
+    relatedPersons.value = []
+    return
+  }
+  try {
+    const list = await listPersonByCulture(id)
+    relatedPersons.value = Array.isArray(list) ? list : []
+  } catch {
+    relatedPersons.value = []
   }
 }
 
@@ -172,7 +259,7 @@ function openVideo() {
   if (!url) {
     return
   }
-  if (videoEmbeddable.value) {
+  if (embedUrl.value) {
     videoOpen.value = true
   } else {
     // 未配置可内嵌源时，直接跳到外部页面
@@ -180,8 +267,10 @@ function openVideo() {
   }
 }
 
-function goScenic(id: number) {
-  router.push(`/scenic/${id}`)
+/* ---------- 相关景点 / 相关人物 ---------- */
+/** 相关景点：跳景点列表并按名称搜索 */
+function goScenicByName(name: string) {
+  router.push({ path: '/scenic', query: { keyword: name } })
 }
 
 function goCulture(id: number) {
@@ -255,7 +344,7 @@ function setupAnimations() {
  * ---------------------------------------------------------- */
 onMounted(async () => {
   document.addEventListener('keydown', onKeydown)
-  await Promise.all([loadAll(), loadDetail(Number(route.params.id))])
+  await Promise.all([loadAll(), loadPersonMap(), loadDetail(Number(route.params.id))])
   await nextTick()
   setupAnimations()
 })
@@ -281,7 +370,7 @@ watch(
 
 <template>
   <section ref="rootEl" class="cd-page">
-    <div v-loading="loading" class="cd-loading" />
+    <StateBlock v-if="loading" state="loading" />
 
     <template v-if="detail">
       <!-- ================= 1. 全屏 Hero ================= -->
@@ -292,6 +381,7 @@ watch(
           :alt="detail.name"
           fetchpriority="high"
           decoding="async"
+          @error="onImgError"
         />
 
         <div class="sy-overlay">
@@ -322,83 +412,75 @@ watch(
         </div>
       </header>
 
-      <!-- ================= 2. 内容区（65 / 35） ================= -->
+      <!-- ================= 2. 内容区（整栏长文） ================= -->
       <div class="sy-container cd-body">
-        <!-- 左：长文 -->
         <article class="cd-article">
           <p v-if="detail.summary" class="cd-lead cd-reveal">{{ detail.summary }}</p>
 
-          <template v-for="(p, i) in paragraphs" :key="i">
-            <p class="cd-p">{{ p }}</p>
-
-            <!-- 第一段后插一张配图 -->
-            <figure v-if="i === 0 && inlineFigures[0]" class="cd-figure">
-              <img :src="inlineFigures[0].coverImage" :alt="inlineFigures[0].name" loading="lazy" />
-              <figcaption>{{ inlineFigures[0].name }} · {{ inlineFigures[0].cityName }}</figcaption>
-            </figure>
-          </template>
-
-          <!-- 末尾再插一张 -->
-          <figure v-if="inlineFigures[1]" class="cd-figure">
-            <img :src="inlineFigures[1].coverImage" :alt="inlineFigures[1].name" loading="lazy" />
-            <figcaption>{{ inlineFigures[1].name }} · {{ inlineFigures[1].cityName }}</figcaption>
-          </figure>
+          <p v-for="(p, i) in paragraphs" :key="i" class="cd-p">{{ p }}</p>
         </article>
+      </div>
 
-        <!-- 右：侧栏 -->
-        <aside class="cd-aside">
-          <!-- 相关视频 -->
-          <button
-            v-if="detail.videoUrl"
-            type="button"
-            class="cd-panel cd-video cd-reveal"
-            @click="openVideo"
-          >
-            <img class="cd-video__poster" :src="detail.coverImage" alt="" loading="lazy" />
-            <span class="cd-video__play" aria-hidden="true">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </span>
-            <span class="cd-video__text">{{ t('cd.video') }}</span>
-          </button>
+      <!-- ================= 2.2 相关影像（与正文同宽） ================= -->
+      <section v-if="detail.videoUrl" class="sy-container cd-video-sec">
+        <p class="sy-eyebrow">Video</p>
+        <h2 class="sy-page-title">相关影像</h2>
+        <button type="button" class="cd-video cd-reveal" @click="openVideo">
+          <img class="cd-video__poster" :src="detail.coverImage" alt="" loading="lazy" @error="onImgError" />
+          <span class="cd-video__play" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          </span>
+          <span class="cd-video__text">{{ t('cd.video') }}</span>
+        </button>
+      </section>
 
-          <!-- 相关景点 -->
-          <div v-if="detail.relatedScenics?.length" class="cd-panel cd-reveal">
+      <!-- ================= 2.5 图片集 ================= -->
+      <section v-if="cultureImages.length" class="sy-container cd-gallery-sec">
+        <p class="sy-eyebrow">Gallery</p>
+        <h2 class="sy-page-title">图片集</h2>
+        <div class="cd-gallery">
+          <img
+            v-for="(img, i) in cultureImages"
+            :key="img"
+            class="cd-gallery__item"
+            :src="img"
+            :alt="`${detail.name} 图片 ${i + 1}`"
+            loading="lazy"
+            decoding="async"
+            @error="onImgError"
+          />
+        </div>
+      </section>
+
+      <!-- ================= 2.6 相关景点 / 相关人物 / 标签（全宽自适应） ================= -->
+      <section
+        v-if="relatedScenicList.length || mergedPeople.length || tags.length"
+        class="sy-container cd-related"
+      >
+        <div class="cd-related__grid">
+          <div v-if="relatedScenicList.length" class="cd-panel cd-reveal">
             <h3 class="cd-panel__title">{{ t('cd.spots') }}</h3>
-            <ul class="cd-spots">
-              <li
-                v-for="s in detail.relatedScenics"
-                :key="s.id"
-                class="cd-spot"
-                @click="goScenic(s.id)"
+            <div class="cd-rel-grid">
+              <button
+                v-for="name in relatedScenicList"
+                :key="name"
+                type="button"
+                class="cd-rel-card"
+                @click="goScenicByName(name)"
               >
-                <img class="cd-spot__img" :src="s.coverImage" alt="" loading="lazy" />
-                <div class="cd-spot__info">
-                  <b>{{ s.name }}</b>
-                  <span>{{ s.cityName }} · {{ s.type }}</span>
-                </div>
-                <em class="cd-spot__arrow">→</em>
-              </li>
-            </ul>
+                <span class="cd-rel-card__thumb">{{ name.slice(0, 1) }}</span>
+                <span class="cd-rel-card__name">{{ name }}</span>
+              </button>
+            </div>
           </div>
 
-          <!-- 传承人 -->
-          <div v-if="detail.inheritors?.length" class="cd-panel cd-reveal">
-            <h3 class="cd-panel__title">{{ t('cd.inheritors') }}</h3>
-            <ul class="cd-people">
-              <li v-for="p in detail.inheritors" :key="p.name" class="cd-person">
-                <span class="cd-person__avatar">{{ p.name.charAt(0) }}</span>
-                <div class="cd-person__info">
-                  <b>{{ p.name }}</b>
-                  <span class="cd-person__title">{{ p.title }}</span>
-                  <p class="cd-person__intro">{{ p.intro }}</p>
-                </div>
-              </li>
-            </ul>
+          <div v-if="mergedPeople.length" class="cd-panel cd-reveal">
+            <h3 class="cd-panel__title">相关人物</h3>
+            <PersonCards :persons="mergedPeople" />
           </div>
 
-          <!-- 标签云 -->
           <div v-if="tags.length" class="cd-panel cd-reveal">
             <h3 class="cd-panel__title">{{ t('cd.tags') }}</h3>
             <div class="cd-cloud">
@@ -407,8 +489,8 @@ watch(
               </span>
             </div>
           </div>
-        </aside>
-      </div>
+        </div>
+      </section>
 
       <!-- ================= 3. 同分类推荐 ================= -->
       <section v-if="sameCategory.length" class="sy-container cd-reco">
@@ -422,7 +504,7 @@ watch(
             class="cd-reco__card"
             @click="goCulture(item.id)"
           >
-            <img class="cd-reco__img" :src="item.coverImage" alt="" loading="lazy" />
+            <img class="cd-reco__img" :src="item.coverImage" alt="" loading="lazy" @error="onImgError" />
             <div class="cd-reco__body">
               <h3 class="cd-reco__name">{{ item.name }}</h3>
               <p class="cd-reco__text">{{ introOf(item) }}</p>
@@ -450,11 +532,13 @@ watch(
     </template>
 
     <!-- 不存在 -->
-    <div v-else-if="!loading" class="cd-missing">
-      <el-empty :description="t('cd.notFound')">
-        <GoldButton @click="router.push('/culture')">{{ t('cd.back') }}</GoldButton>
-      </el-empty>
-    </div>
+    <StateBlock
+      v-else-if="!loading"
+      state="error"
+      error-text="文化信息不存在"
+      action-text="返回文化列表"
+      :action="() => router.push('/culture')"
+    />
 
     <!-- ================= 视频 Lightbox ================= -->
     <Teleport to="body">
@@ -464,7 +548,7 @@ watch(
             ✕
           </button>
           <div class="cd-lightbox__frame">
-            <iframe :src="detail?.videoUrl" allowfullscreen frameborder="0" :title="t('cd.video')" />
+            <iframe :src="embedUrl" allowfullscreen frameborder="0" :title="t('cd.video')" />
           </div>
         </div>
       </transition>
@@ -490,8 +574,8 @@ watch(
   position: relative;
   display: flex;
   align-items: flex-end;
-  height: 100vh;
-  min-height: 560px;
+  height: $hero-detail-height;
+  min-height: 520px;
   overflow: hidden;
   isolation: isolate;
 }
@@ -561,7 +645,7 @@ watch(
   margin-top: 14px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: $fs-hero;
+  font-size: $fs-hero-xl;
   line-height: 1;
   letter-spacing: 0.02em;
   color: $color-text-light;
@@ -577,10 +661,10 @@ watch(
 
 .cd-hero__tag {
   padding: 4px 14px;
-  border: 1px solid rgba(201, 168, 106, 0.6);
+  border: 1px solid rgba(212, 179, 116, 0.6);
   border-radius: $radius-pill;
-  font-size: 12px;
-  letter-spacing: 0.1em;
+  font-size: $fs-tiny;
+  letter-spacing: 0.08em;
   color: $color-text-light;
 }
 
@@ -588,11 +672,7 @@ watch(
  * 内容区（65 / 35）
  * ========================================================== */
 .cd-body {
-  display: grid;
-  grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
-  gap: clamp(32px, 5vw, 90px);
-  align-items: start;
-  padding-block: clamp(48px, 7vw, 110px);
+  padding-block: clamp(48px, 7vw, 110px) clamp(28px, 3.6vw, 48px);
 }
 
 .cd-article {
@@ -604,20 +684,20 @@ watch(
   padding: clamp(16px, 2vw, 26px) clamp(18px, 2.2vw, 30px);
   border-left: 3px solid $color-gold;
   border-radius: 0 $radius-md $radius-md 0;
-  background: linear-gradient(90deg, rgba(201, 168, 106, 0.22), rgba(201, 168, 106, 0.06));
+  background: linear-gradient(90deg, rgba(212, 179, 116, 0.22), rgba(212, 179, 116, 0.06));
   font-family: $font-title;
   font-size: clamp(17px, 1.5vw, 22px);
   line-height: 1.9;
-  color: $color-primary;
+  color: var(--sy-accent);
 }
 
 /* 正文：大字号 + 行高 1.9 */
 .cd-p {
-  margin-top: clamp(18px, 2vw, 28px);
+  margin-top: 24px;
   font-family: $font-body;
-  font-size: clamp(17px, 1.45vw, 21px);
+  font-size: $fs-body-lg;
   line-height: 1.9;
-  color: rgba(26, 26, 26, 0.84);
+  color: rgba(var(--sy-text-rgb), 0.84);
   text-align: justify;
 }
 
@@ -629,7 +709,7 @@ watch(
     width: 100%;
     aspect-ratio: 16 / 9;
     object-fit: cover;
-    border: 1px solid rgba(201, 168, 106, 0.4);
+    border: 1px solid rgba(212, 179, 116, 0.4);
     border-radius: $radius-lg;
     box-shadow: $shadow-md;
   }
@@ -638,7 +718,7 @@ watch(
     margin-top: 10px;
     font-size: $fs-small;
     letter-spacing: 0.1em;
-    color: rgba(26, 26, 26, 0.5);
+    color: rgba(var(--sy-text-rgb), 0.5);
     text-align: center;
   }
 }
@@ -646,20 +726,16 @@ watch(
 /* ---------------- 侧栏 ---------------- */
 .cd-aside {
   position: sticky;
-  top: 96px;
+  top: calc(#{$nav-height} + 28px);
   display: flex;
   flex-direction: column;
-  gap: clamp(16px, 1.8vw, 24px);
+  gap: 20px;
 }
 
 .cd-panel {
+  @include sy-card-window(24px);
   display: block;
   width: 100%;
-  padding: clamp(16px, 1.8vw, 24px);
-  border: 1px solid $color-border-gold;
-  border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.66);
-  box-shadow: $shadow-md;
   text-align: left;
 }
 
@@ -671,24 +747,32 @@ watch(
   font-weight: 900;
   font-size: clamp(14px, 1.2vw, 18px);
   letter-spacing: 0.12em;
-  color: $color-primary;
+  color: var(--sy-accent);
 
   &::before {
     content: '';
     position: absolute;
     top: 0.14em;
     left: 0;
-    width: 2px;
-    height: 0.86em;
+    width: 3px;
+    height: 1em;
     background: $color-gold;
   }
 }
 
-/* 视频卡 */
+/* 视频卡（与正文同宽） */
 .cd-video {
   position: relative;
+  display: block;
+  width: 70%;
+  margin-inline: auto;
+  margin-top: clamp(20px, 2.6vw, 36px);
   padding: 0;
   overflow: hidden;
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-lg;
+  background: rgba(var(--sy-surface-rgb), 0.66);
+  box-shadow: $shadow-md;
   cursor: pointer;
   transition:
     border-color $duration-normal $ease-out-expo,
@@ -713,7 +797,7 @@ watch(
 .cd-video__poster {
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
   transition: transform 1s $ease-out-expo;
 }
@@ -727,7 +811,7 @@ watch(
   width: 56px;
   height: 56px;
   transform: translate(-50%, -50%);
-  border: 1px solid rgba(201, 168, 106, 0.8);
+  border: 1px solid rgba(212, 179, 116, 0.8);
   border-radius: 50%;
   background: rgba(20, 26, 34, 0.5);
   backdrop-filter: blur(6px);
@@ -748,6 +832,22 @@ watch(
   text-shadow: $shadow-text;
 }
 
+/* 相关影像区：与正文同宽 */
+.cd-video-sec {
+  padding-block: clamp(28px, 3.6vw, 48px) clamp(12px, 1.6vw, 24px);
+}
+
+/* 相关板块：全宽自适应栅格（随屏幕列数自适应，避免留白） */
+.cd-related {
+  padding-block: clamp(28px, 3.6vw, 48px) clamp(40px, 6vw, 88px);
+}
+
+.cd-related__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: clamp(16px, 2vw, 24px);
+}
+
 /* 相关景点 */
 .cd-spots {
   display: flex;
@@ -766,7 +866,7 @@ watch(
     transform: translateX(4px);
 
     b {
-      color: $color-primary;
+      color: var(--sy-accent);
     }
 
     .cd-spot__arrow {
@@ -782,7 +882,7 @@ watch(
   flex-shrink: 0;
   object-fit: cover;
   border-radius: $radius-md;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
 }
 
 .cd-spot__info {
@@ -803,7 +903,7 @@ watch(
 
   span {
     font-size: 12px;
-    color: rgba(26, 26, 26, 0.5);
+    color: rgba(var(--sy-text-rgb), 0.5);
   }
 }
 
@@ -834,13 +934,13 @@ watch(
   width: 46px;
   height: 46px;
   flex-shrink: 0;
-  border: 1px solid rgba(201, 168, 106, 0.6);
+  border: 1px solid rgba(212, 179, 116, 0.6);
   border-radius: 50%;
-  background: rgba(201, 168, 106, 0.12);
+  background: rgba(212, 179, 116, 0.12);
   font-family: $font-title;
   font-weight: 900;
   font-size: 20px;
-  color: $color-primary;
+  color: var(--sy-accent);
 }
 
 .cd-person__info {
@@ -867,7 +967,61 @@ watch(
   font-family: $font-body;
   font-size: $fs-small;
   line-height: 1.8;
-  color: rgba(26, 26, 26, 0.66);
+  color: rgba(var(--sy-text-rgb), 0.66);
+}
+
+/* 传承人（圆形头像卡，2 列） */
+.cd-inherit-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.cd-inherit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 8px;
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-md;
+  background: rgba(var(--sy-surface-rgb), 0.55);
+  cursor: pointer;
+  transition:
+    border-color $duration-normal $ease-out-expo,
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo;
+
+  &:hover {
+    border-color: $color-gold;
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
+  }
+}
+
+.cd-inherit-card__avatar {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border: 2px solid rgba(212, 179, 116, 0.7);
+  border-radius: 50%;
+}
+
+.cd-inherit-card__name {
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.06em;
+  color: $color-text-dark;
+  @include text-ellipsis(1);
+}
+
+.cd-inherit-card__brief {
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  color: rgba(var(--sy-text-rgb), 0.6);
+  @include text-ellipsis(2);
 }
 
 /* 标签云 */
@@ -878,23 +1032,23 @@ watch(
 }
 
 .cd-cloud__item {
-  padding: 5px 14px;
+  padding: 8px 20px;
   border-radius: $radius-pill;
-  font-size: 12px;
+  font-size: $fs-tiny;
   letter-spacing: 0.08em;
 
   &--0 {
-    border: 1px solid rgba(201, 168, 106, 0.6);
-    color: $color-primary;
+    border: 1px solid rgba(212, 179, 116, 0.6);
+    color: var(--sy-accent);
   }
 
   &--1 {
-    background: rgba(201, 168, 106, 0.18);
+    background: rgba(212, 179, 116, 0.18);
     color: $color-bamboo;
   }
 
   &--2 {
-    border: 1px dashed rgba(140, 31, 40, 0.35);
+    border: 1px dashed rgba(122, 26, 34, 0.35);
     color: $color-ink;
   }
 }
@@ -916,9 +1070,9 @@ watch(
 .cd-reco__card {
   @include hover-lift;
   overflow: hidden;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.62);
+  background: rgba(var(--sy-surface-rgb), 0.62);
   box-shadow: $shadow-md;
   cursor: pointer;
 
@@ -930,7 +1084,7 @@ watch(
     }
 
     .cd-reco__name {
-      color: $color-primary;
+      color: var(--sy-accent);
     }
   }
 }
@@ -964,7 +1118,7 @@ watch(
   font-family: $font-body;
   font-size: $fs-small;
   line-height: 1.85;
-  color: rgba(26, 26, 26, 0.66);
+  color: rgba(var(--sy-text-rgb), 0.66);
   @include text-ellipsis(3);
 }
 
@@ -975,7 +1129,7 @@ watch(
   position: relative;
   overflow: hidden;
   background:
-    radial-gradient(120% 130% at 80% 0%, rgba(201, 168, 106, 0.22) 0%, rgba(14, 42, 71, 0) 60%),
+    radial-gradient(120% 130% at 80% 0%, rgba(212, 179, 116, 0.22) 0%, rgba(14, 42, 71, 0) 60%),
     linear-gradient(120deg, $color-ink 0%, #16324f 55%, #1d2436 100%);
 
   &::before {
@@ -1037,7 +1191,7 @@ watch(
 }
 
 .cd-lightbox__frame {
-  width: min(1100px, 100%);
+  width: min(770px, 100%);
   aspect-ratio: 16 / 9;
   overflow: hidden;
   border-radius: $radius-md;
@@ -1057,12 +1211,12 @@ watch(
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: 1px solid rgba(201, 168, 106, 0.6);
+  border: 1px solid rgba(212, 179, 116, 0.6);
   color: $color-gold;
   font-size: 18px;
 
   &:hover {
-    background: rgba(201, 168, 106, 0.16);
+    background: rgba(212, 179, 116, 0.16);
   }
 }
 
@@ -1080,12 +1234,8 @@ watch(
  * 响应式：大屏分栏 / 小屏堆叠
  * ========================================================== */
 @include responsive(lg) {
-  .cd-body {
+  .cd-related__grid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .cd-aside {
-    position: static;
   }
 }
 
@@ -1098,5 +1248,83 @@ watch(
   .cd-lead {
     font-size: 17px;
   }
+}
+
+/* ============================================================
+ * 图片集 / 相关景点、相关人物
+ * ========================================================== */
+.cd-gallery-sec {
+  padding-block: clamp(48px, 7vw, 110px);
+}
+
+.cd-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: clamp(12px, 1.6vw, 22px);
+  margin-top: clamp(24px, 3.4vw, 44px);
+}
+
+.cd-gallery__item {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border: 1px solid rgba(212, 179, 116, 0.4);
+  border-radius: $radius-lg;
+  box-shadow: $shadow-md;
+}
+
+/* 相关景点：自适应小卡（缩略图 + 名称） */
+.cd-rel-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.cd-rel-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-md;
+  background: rgba(var(--sy-surface-rgb), 0.55);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color $duration-normal $ease-out-expo,
+    transform $duration-normal $ease-out-expo,
+    box-shadow $duration-normal $ease-out-expo;
+
+  &:hover {
+    border-color: $color-gold;
+    transform: translateY(-2px);
+    box-shadow: $shadow-md;
+  }
+}
+
+.cd-rel-card__thumb {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: $radius-sm;
+  background:
+    radial-gradient(120% 120% at 20% 0%, rgba(242, 215, 155, 0.28) 0%, rgba(14, 42, 71, 0) 60%),
+    linear-gradient(135deg, #8e2230, #5f1218);
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: 18px;
+  color: $color-gold;
+}
+
+.cd-rel-card__name {
+  min-width: 0;
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: $fs-caption;
+  letter-spacing: 0.04em;
+  color: $color-text-dark;
+  @include text-ellipsis(1);
 }
 </style>

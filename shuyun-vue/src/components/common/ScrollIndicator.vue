@@ -50,7 +50,8 @@ const emit = defineEmits<{ (e: 'select', index: number): void }>()
   z-index: $z-dots;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  /* 列间距（较上一版缩小 0.5×） */
+  gap: 20px;
   transform: translateY(-50%);
 }
 
@@ -78,7 +79,8 @@ const emit = defineEmits<{ (e: 'select', index: number): void }>()
 
 .scroll-indicator__label {
   font-family: $font-body;
-  font-size: 12px;
+  /* 字号（较上一版放大 0.5×） */
+  font-size: 20.25px;
   letter-spacing: 0.2em;
   white-space: nowrap;
   color: $color-text-light;
@@ -91,9 +93,10 @@ const emit = defineEmits<{ (e: 'select', index: number): void }>()
 }
 
 .scroll-indicator__mark {
-  width: 8px;
-  height: 8px;
-  border: 1px solid rgba(201, 168, 106, 0.7);
+  /* 空心圆（较上一版放大 0.5×） */
+  width: 18px;
+  height: 18px;
+  border: 2.25px solid rgba(212, 179, 116, 0.7);
   border-radius: 50%;
   background: transparent;
   transition:
@@ -105,7 +108,7 @@ const emit = defineEmits<{ (e: 'select', index: number): void }>()
 @include responsive(900px) {
   .scroll-indicator {
     right: 8px;
-    gap: 14px;
+    gap: 12px;
   }
 
   .scroll-indicator__label {

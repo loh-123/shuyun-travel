@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1600, initial-scale=1" />
+  <title>第4章 · 系统架构图</title>
+  <style>
+    :root{
+      --red:#8C1F28; --gold:#D4B374; --ink:#1A1A1A; --gray:#6B7280; --paper:#F5F1E8;
+      --cn:"Source Han Serif SC","Noto Serif SC","LXGW WenKai","Songti SC",STSong,"Microsoft YaHei",serif;
+      --mono:"JetBrains Mono","Inter",monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{width:1600px;height:1000px;overflow:hidden;}
+    body{background:#ffffff;color:var(--ink);font-family:var(--cn);-webkit-font-smoothing:antialiased;}
+    .canvas{
+      width:1600px;height:1000px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+    }
+
+    /* ---------- 标题 ---------- */
+    .head{text-align:center;margin-bottom:24px;}
+    .kicker{font-family:var(--mono);font-size:15px;letter-spacing:.5em;padding-left:.5em;color:var(--gold);margin-bottom:16px;}
+    .title{font-size:50px;font-weight:700;letter-spacing:.16em;padding-left:.16em;}
+    .rule{width:130px;height:3px;margin:22px auto 0;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold));}
+
+    /* ---------- 分层容器 ---------- */
+    .layer{
+      width:1420px;background:var(--paper);
+      border:1.5px solid rgba(212,179,116,.65);border-radius:16px;
+      padding:18px 30px;display:flex;align-items:center;gap:30px;
+      box-shadow:0 16px 36px -28px rgba(26,26,26,.55);
+    }
+    .layer-label{width:186px;flex:none;border-right:2px solid rgba(212,179,116,.85);padding-right:22px;}
+    .layer-label .cn{font-size:24px;font-weight:700;letter-spacing:.1em;color:var(--red);line-height:1.2;}
+    .layer-label .en{font-family:var(--mono);font-size:12px;letter-spacing:.16em;color:var(--gray);margin-top:9px;}
+    .cards{flex:1;display:flex;gap:18px;}
+    .card{
+      flex:1;height:96px;background:#fff;
+      border:1px solid rgba(212,179,116,.75);border-radius:10px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;
+      box-shadow:0 10px 24px -20px rgba(26,26,26,.6);
+    }
+    .card .t{font-size:19px;font-weight:700;color:var(--ink);letter-spacing:.04em;}
+    .card .s{font-family:var(--mono);font-size:12px;color:var(--gray);letter-spacing:.08em;}
+
+    /* ---------- 层间箭头 ---------- */
+    .arrow-row{height:68px;display:flex;align-items:center;justify-content:center;gap:16px;}
+    .varrow{width:18px;height:52px;display:block;}
+    .proto{
+      font-family:var(--mono);font-size:14px;letter-spacing:.06em;color:var(--red);
+      padding:5px 16px;border:1px dashed var(--gold);border-radius:999px;background:#fff;
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+
+    <header class="head">
+      <div class="kicker">CHAPTER 04 · SYSTEM ARCHITECTURE</div>
+      <h1 class="title">系统架构</h1>
+      <div class="rule"></div>
+    </header>
+
+    <!-- 表现层 -->
+    <section class="layer">
+      <div class="layer-label">
+        <div class="cn">表现层</div>
+        <div class="en">PRESENTATION</div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="t">前台</div><div class="s">USER WEB</div></div>
+        <div class="card"><div class="t">3D 地图</div><div class="s">MAP · THREE.JS</div></div>
+        <div class="card"><div class="t">数据大屏</div><div class="s">SCREEN</div></div>
+        <div class="card"><div class="t">管理后台</div><div class="s">ADMIN</div></div>
+      </div>
+    </section>
+
+    <div class="arrow-row">
+      <svg class="varrow" viewBox="0 0 18 52" fill="none">
+        <line x1="9" y1="0" x2="9" y2="42" stroke="#D4B374" stroke-width="2" />
+        <polygon points="9,52 3,40 15,40" fill="#D4B374" />
+      </svg>
+      <span class="proto">HTTP&nbsp;/&nbsp;WebSocket&nbsp;/&nbsp;SSE</span>
+    </div>
+
+    <!-- 服务层 -->
+    <section class="layer">
+      <div class="layer-label">
+        <div class="cn">服务层</div>
+        <div class="en">SERVICE</div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="t">Web 模块</div><div class="s">shuyun-web</div></div>
+        <div class="card"><div class="t">Admin 模块</div><div class="s">shuyun-admin</div></div>
+        <div class="card"><div class="t">AI 模块</div><div class="s">shuyun-ai</div></div>
+      </div>
+    </section>
+
+    <div class="arrow-row">
+      <svg class="varrow" viewBox="0 0 18 52" fill="none">
+        <line x1="9" y1="0" x2="9" y2="42" stroke="#D4B374" stroke-width="2" />
+        <polygon points="9,52 3,40 15,40" fill="#D4B374" />
+      </svg>
+      <span class="proto">JDBC&nbsp;/&nbsp;Redis&nbsp;/&nbsp;HTTPS</span>
+    </div>
+
+    <!-- 数据与智能层 -->
+    <section class="layer">
+      <div class="layer-label">
+        <div class="cn">数据与智能层</div>
+        <div class="en">DATA &amp; AI</div>
+      </div>
+      <div class="cards">
+        <div class="card"><div class="t">MySQL</div><div class="s">RELATIONAL DB</div></div>
+        <div class="card"><div class="t">Redis</div><div class="s">CACHE · SESSION</div></div>
+        <div class="card"><div class="t">女娲智能体 API</div><div class="s">LLM AGENT</div></div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

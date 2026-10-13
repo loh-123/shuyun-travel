@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1600, initial-scale=1" />
+  <title>第3章 · 创新点对比表</title>
+  <style>
+    :root{
+      --red:#8C1F28;      /* 蜀锦红 */
+      --gold:#D4B374;     /* 金 */
+      --ink:#1A1A1A;      /* 深色 */
+      --gray:#6B7280;     /* 灰 */
+      --paper:#F5F1E8;    /* 浅灰底 */
+      --cn:"Source Han Serif SC","Noto Serif SC","LXGW WenKai","Songti SC",STSong,"Microsoft YaHei",serif;
+      --mono:"JetBrains Mono","Inter",monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{width:1600px;height:1000px;overflow:hidden;}
+    body{
+      background:#ffffff;
+      color:var(--ink);
+      font-family:var(--cn);
+      -webkit-font-smoothing:antialiased;
+    }
+    .canvas{
+      width:1600px;height:1000px;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      gap:58px;
+    }
+
+    /* ---------- 标题 ---------- */
+    .head{text-align:center;}
+    .kicker{
+      font-family:var(--mono);
+      font-size:15px;letter-spacing:.55em;padding-left:.55em;
+      color:var(--gold);margin-bottom:18px;
+    }
+    .title{
+      font-size:56px;font-weight:700;letter-spacing:.14em;padding-left:.14em;
+      color:var(--ink);
+    }
+    .vsline{
+      margin-top:20px;
+      display:flex;align-items:center;justify-content:center;gap:22px;
+      font-size:23px;letter-spacing:.1em;
+    }
+    .vsline .left{color:var(--gray);}
+    .vsline .right{color:var(--red);font-weight:700;}
+    .vsline em{
+      font-family:var(--mono);font-style:normal;
+      font-size:16px;letter-spacing:.18em;
+      color:var(--gold);
+      padding:2px 12px;border:1px solid var(--gold);border-radius:999px;
+    }
+    .rule{
+      width:130px;height:3px;margin:26px auto 0;border-radius:2px;
+      background:linear-gradient(90deg,var(--red),var(--gold));
+    }
+
+    /* ---------- 对比表 ---------- */
+    table{
+      width:1340px;border-collapse:separate;border-spacing:0;
+      border:2px solid var(--gold);
+      border-radius:14px;overflow:hidden;
+      background:#fff;
+      box-shadow:0 26px 64px -30px rgba(26,26,26,.38);
+    }
+    thead th{
+      height:64px;
+      background:var(--red);color:#fff;
+      font-size:22px;font-weight:700;letter-spacing:.18em;
+      text-align:left;padding:0 42px;
+      font-family:var(--cn);
+    }
+    thead th.center{text-align:center;}
+    tbody td{
+      height:60px;padding:0 42px;vertical-align:middle;
+      font-size:19px;line-height:1.3;color:var(--gray);
+      /* 数字 / 英文落到 JetBrains Mono，中文落到宋体 */
+      font-family:var(--mono),var(--cn);
+    }
+    tbody tr:nth-child(odd)  td{background:#ffffff;}
+    tbody tr:nth-child(even) td{background:var(--paper);}
+    /* 金色竖向分隔线 */
+    thead th + th,tbody td + td{border-left:1px solid rgba(212,179,116,.45);}
+    /* 维度列 */
+    tbody td.dim{
+      font-family:var(--cn);
+      font-weight:700;font-size:20px;color:var(--ink);letter-spacing:.06em;
+    }
+    tbody td.dim span{display:inline-block;padding-left:14px;border-left:4px solid var(--red);line-height:1.25;}
+    /* 蜀韵·智游 列 */
+    tbody td.ours{
+      color:var(--red);font-weight:600;
+      font-family:var(--mono),var(--cn);
+    }
+  </style>
+</head>
+<body>
+  <div class="canvas">
+
+    <header class="head">
+      <div class="kicker">CHAPTER 03 · INNOVATION</div>
+      <h1 class="title">创新点对比</h1>
+      <div class="vsline">
+        <span class="left">传统旅游网站</span>
+        <em>VS</em>
+        <span class="right">蜀韵·智游</span>
+      </div>
+      <div class="rule"></div>
+    </header>
+
+    <table>
+      <colgroup>
+        <col style="width:250px;" />
+        <col style="width:480px;" />
+        <col style="width:610px;" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th class="center">传统旅游网站</th>
+          <th class="center">蜀韵·智游</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dim"><span>AI 能力</span></td>
+          <td>独立对话框，服务 FAQ</td>
+          <td class="ours">女娲智能体，7 类意图 + 8 个工具</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>地图呈现</span></td>
+          <td>静态图片，平面折线</td>
+          <td class="ours">Three.js 3D 地形，21 市州热力</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>数据更新</span></td>
+          <td>静态图表，手动刷新</td>
+          <td class="ours">WebSocket 秒级刷新，rAF 逐帧驱动</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>服务模式</span></td>
+          <td>用户主动搜索</td>
+          <td class="ours">定时任务主动推送天气 / 客流 / 交通</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>文化深度</span></td>
+          <td>图文简介</td>
+          <td class="ours">文化 ↔ 景点 ↔ 传承人 三维关联</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</body>
+</html>

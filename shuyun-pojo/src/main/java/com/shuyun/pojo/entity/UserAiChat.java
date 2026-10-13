@@ -46,6 +46,26 @@ public class UserAiChat implements Serializable {
     @TableField("tokens")
     private Integer tokens;
 
+    /** 标记类型：0-未标记，1-优质对话，2-训练语料 */
+    @TableField("mark_type")
+    private Integer markType;
+
+    /** 输入长度（字符数，仅 AI 回复记录填写） */
+    @TableField("input_len")
+    private Integer inputLen;
+
+    /** 输出长度（字符数，仅 AI 回复记录填写） */
+    @TableField("output_len")
+    private Integer outputLen;
+
+    /** 本次调用耗时（毫秒） */
+    @TableField("duration_ms")
+    private Long durationMs;
+
+    /** 是否成功：0-失败，1-成功 */
+    @TableField("success")
+    private Integer success;
+
     /** 创建时间 */
     @TableField("create_time")
     private LocalDateTime createTime;

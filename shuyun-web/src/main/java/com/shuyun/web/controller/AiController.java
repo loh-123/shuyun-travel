@@ -1,5 +1,6 @@
 package com.shuyun.web.controller;
 
+import com.shuyun.ai.nuwa.NuwaAgentService;
 import com.shuyun.common.BusinessException;
 import com.shuyun.common.Result;
 import com.shuyun.pojo.entity.UserAiChat;
@@ -7,6 +8,7 @@ import com.shuyun.service.AiChatService;
 import com.shuyun.web.context.UserContext;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,38 +20,40 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 /**
- * AI 对话接口
+ * AI 对话接口（女娲智能体）
  *
- * <p>当前回复由 {@code AiChatServiceImpl} 按关键词生成（Markdown），
- * SSE 逐片推送；接入女娲智能体后只需替换服务层实现，接口与前端均不用改。</p>
+ * <p>对话经 {@link NuwaAgentService} 转发至女娲平台智能体，以 SSE 流式返回：
+ * 每段正文为 {@code data: {"content":"xxx"}}，结束时为 {@code data: [DONE]}。
+ * 会话ID通过响应头 {@code X-Session-Id} 回传。</p>
  */
 @RestController
 @RequestMapping("/api/ai")
 @RequiredArgsConstructor
 public class AiController {
 
-    /** SSE 每片推送的字符数（越小越"逐字"，越大越快出结果） */
-    private static final int CHUNK_SIZE = 6;
-
-    /** SSE 每片之间的间隔（毫秒） */
-    private static final long STREAM_INTERVAL_MS = 24L;
+    /** 响应头：回传本次会话ID（前端为空时用于同步） */
+    private static final String HEADER_SESSION_ID = "X-Session-Id";
 
     private final AiChatService aiChatService;
 
+    private final NuwaAgentService nuwaAgentService;
+
     /**
-     * 发起一次对话（非流式）
+     * 发起一次对话（SSE 流式）
      *
-     * @param body 请求体：{message, sessionId}；sessionId 为空时自动生成
-     * @return 统一结果，data = {reply, sessionId}
+     * <p>请求体：{message, sessionId}；sessionId 为空时自动生成。
+     * token 通过请求头 {@code Authorization} 携带，由 {@code JwtInterceptor} 解析。</p>
+     *
+     * @param body 请求体
+     * @return SSE 事件流
      */
-    @PostMapping("/chat")
-    public Result<Map<String, Object>> chat(@RequestBody Map<String, String> body) {
+    @PostMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> chat(@RequestBody Map<String, String> body) {
         String message = body.get("message");
         if (!StringUtils.hasText(message)) {
             throw new BusinessException("消息内容不能为空");
@@ -60,60 +64,11 @@ public class AiController {
             sessionId = UUID.randomUUID().toString().replace("-", "");
         }
 
-        String reply = aiChatService.chat(UserContext.getUserId(), message, sessionId);
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("reply", reply);
-        data.put("sessionId", sessionId);
-        return Result.ok(data);
-    }
-
-    /**
-     * 流式对话（SSE）
-     *
-     * <p>逐片推送 Markdown 文本。注意：浏览器 EventSource 无法自定义请求头，
-     * 因此 token 通过查询参数传递，由 {@code JwtInterceptor} 统一解析。</p>
-     *
-     * @param message   用户消息
-     * @param sessionId 会话ID，为空时自动生成
-     * @return SSE 事件流（session → message... → done）
-     */
-    @GetMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter chatStream(@RequestParam String message,
-                                 @RequestParam(required = false) String sessionId) {
-        if (!StringUtils.hasText(message)) {
-            throw new BusinessException("消息内容不能为空");
-        }
-
-        String sid = StringUtils.hasText(sessionId)
-                ? sessionId
-                : UUID.randomUUID().toString().replace("-", "");
-        Long userId = UserContext.getUserId();
-
-        SseEmitter emitter = new SseEmitter(60_000L);
-        try {
-            // 1) 落库（用户消息 + 回复），并拿到回复全文
-            String reply = aiChatService.chat(userId, message, sid);
-
-            // 2) 先把 sessionId 推给前端
-            emitter.send(SseEmitter.event().name("session").data(sid));
-
-            // 3) 逐片推送
-            for (int i = CHUNK_SIZE; i < reply.length() + CHUNK_SIZE; i += CHUNK_SIZE) {
-                String chunk = reply.substring(0, Math.min(i, reply.length()));
-                emitter.send(SseEmitter.event().name("message").data(chunk));
-                Thread.sleep(STREAM_INTERVAL_MS);
-            }
-
-            emitter.send(SseEmitter.event().name("done").data("done"));
-            emitter.complete();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            emitter.completeWithError(e);
-        } catch (Exception e) {
-            emitter.completeWithError(e);
-        }
-        return emitter;
+        SseEmitter emitter = nuwaAgentService.chat(UserContext.getUserId(), message, sessionId);
+        return ResponseEntity.ok()
+                .header(HEADER_SESSION_ID, sessionId)
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(emitter);
     }
 
     /**
@@ -135,6 +90,16 @@ public class AiController {
     @GetMapping("/sessions")
     public Result<List<Map<String, Object>>> sessions() {
         return Result.ok(aiChatService.listSessions(UserContext.getUserId()));
+    }
+
+    /**
+     * 查询当前用户的 AI 画像（兴趣 / 同行 / 预算等），供对话页「记忆体」面板展示
+     *
+     * @return 画像字段（无记录时为空对象）
+     */
+    @GetMapping("/profile")
+    public Result<Map<String, Object>> profile() {
+        return Result.ok(aiChatService.profile(UserContext.getUserId()));
     }
 
     /**

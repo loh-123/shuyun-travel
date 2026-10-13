@@ -27,6 +27,11 @@ public class JwtInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        // 放行 CORS 预检请求：OPTIONS 不携带 Authorization，否则会被判为 401
+        if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
+            return true;
+        }
+
         String token = resolveToken(request);
         if (!StringUtils.hasText(token)) {
             throw new BusinessException(401, "未登录，请先登录");

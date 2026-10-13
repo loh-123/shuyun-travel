@@ -249,7 +249,7 @@ onMounted(() => announceBg(0))
   gap: clamp(12px, 2vw, 32px);
   margin-top: clamp(28px, 5vh, 64px);
   padding-top: clamp(16px, 2vh, 28px);
-  border-top: 1px solid rgba(201, 168, 106, 0.28);
+  border-top: 1px solid rgba(212, 179, 116, 0.28);
 }
 
 .season__tab {

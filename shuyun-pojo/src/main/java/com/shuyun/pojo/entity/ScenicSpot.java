@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -31,7 +32,7 @@ public class ScenicSpot implements Serializable {
     @TableField("name")
     private String name;
 
-    /** 所属市州ID */
+    /** 所属市州ID（市州名称在 VO 层通过 city 表派生，库里无 city_name 列） */
     @TableField("city_id")
     private Long cityId;
 
@@ -46,6 +47,10 @@ public class ScenicSpot implements Serializable {
     /** 地址 */
     @TableField("address")
     private String address;
+
+    /** 相关网址 */
+    @TableField("website")
+    private String website;
 
     /** 经度 */
     @TableField("longitude")
@@ -79,15 +84,25 @@ public class ScenicSpot implements Serializable {
     @TableField("tags")
     private String tags;
 
+    /** 推荐理由（后台编辑，用于首页/详情页推荐文案） */
+    @TableField("recommend_reason")
+    private String recommendReason;
+
+    /** 景点视频链接（B 站 / 央视网等，可能为空） */
+    @TableField("video_url")
+    private String videoUrl;
+
     /** 浏览次数（人气） */
     @TableField("view_count")
     private Integer viewCount;
 
     /** 创建时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("create_time")
     private LocalDateTime createTime;
 
     /** 更新时间 */
+    @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     @TableField("update_time")
     private LocalDateTime updateTime;
 

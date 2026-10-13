@@ -4,13 +4,28 @@
  * - 全局布局（导航栏 + 页脚 + 回到顶部）
  * - 全局路由过渡：卷轴收起 / 展开
  * - 鼠标跟随光晕
+ * - 后台/用户后台路由（/admin/**、/user/**）不套前台布局，由各自布局组件渲染
  */
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import DefaultLayout from '@/layouts/DefaultLayout.vue'
 import CursorGlow from '@/components/common/CursorGlow.vue'
+
+const route = useRoute()
+
+/** 是否使用自带布局的全屏页面（管理员后台 / 用户后台 / 数据大屏 / 城市 3D 全景） */
+const isBare = computed(
+  () =>
+    route.path.startsWith('/admin') ||
+    route.path.startsWith('/user') ||
+    route.path === '/screen' ||
+    route.path.startsWith('/city'),
+)
 </script>
 
 <template>
-  <DefaultLayout>
+  <!-- 前台：套用全局布局 -->
+  <DefaultLayout v-if="!isBare">
     <router-view v-slot="{ Component, route }">
       <!--
         路由切换：以 path 作为 key，保证「同组件不同参数」也会重新挂载并播放动画；
@@ -22,8 +37,11 @@ import CursorGlow from '@/components/common/CursorGlow.vue'
     </router-view>
   </DefaultLayout>
 
-  <!-- 鼠标跟随光晕：全局挂载，所有页面共用 -->
-  <CursorGlow />
+  <!-- 后台 / 用户后台：路由自带布局，不套前台导航栏与页脚 -->
+  <router-view v-else />
+
+  <!-- 鼠标跟随光晕：仅前台展示 -->
+  <CursorGlow v-if="!isBare" />
 </template>
 
 <style>

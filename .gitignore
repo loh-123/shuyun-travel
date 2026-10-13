@@ -40,3 +40,6 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+### 大型压缩包（Gitee 单文件100MB限制）###
+*.zip

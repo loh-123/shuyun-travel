@@ -11,7 +11,13 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AiChatPopup: typeof import('./src/components/common/AiChatPopup.vue')['default']
+    AiFab: typeof import('./src/components/common/AiFab.vue')['default']
     AiSection: typeof import('./src/components/home/AiSection.vue')['default']
+    AuroraBackground: typeof import('./src/components/common/AuroraBackground.vue')['default']
+    BrandLogo: typeof import('./src/components/common/BrandLogo.vue')['default']
+    CityInfoPanel: typeof import('./src/components/map/CityInfoPanel.vue')['default']
+    ComingSoonModal: typeof import('./src/components/common/ComingSoonModal.vue')['default']
     CultureIcon: typeof import('./src/components/common/CultureIcon.vue')['default']
     CultureSection: typeof import('./src/components/home/CultureSection.vue')['default']
     CursorGlow: typeof import('./src/components/common/CursorGlow.vue')['default']
@@ -23,17 +29,28 @@ declare module 'vue' {
     ElInputNumber: typeof import('element-plus/es')['ElInputNumber']
     ElOption: typeof import('element-plus/es')['ElOption']
     ElSelect: typeof import('element-plus/es')['ElSelect']
+    ElTimeline: typeof import('element-plus/es')['ElTimeline']
+    ElTimelineItem: typeof import('element-plus/es')['ElTimelineItem']
     GhostButton: typeof import('./src/components/common/GhostButton.vue')['default']
     GoldButton: typeof import('./src/components/common/GoldButton.vue')['default']
+    HeritageLinksPanel: typeof import('./src/components/map/HeritageLinksPanel.vue')['default']
     HeroSection: typeof import('./src/components/home/HeroSection.vue')['default']
+    HotScenicSection: typeof import('./src/components/home/HotScenicSection.vue')['default']
+    KnowledgesPanel: typeof import('./src/components/map/KnowledgesPanel.vue')['default']
     Loading: typeof import('./src/components/common/Loading.vue')['default']
+    Map3DScene: typeof import('./src/components/map/Map3DScene.vue')['default']
+    MetricValue: typeof import('./src/components/map/MetricValue.vue')['default']
+    Pagination: typeof import('./src/components/common/Pagination.vue')['default']
+    PersonCards: typeof import('./src/components/common/PersonCards.vue')['default']
+    ProfileMenuIcon: typeof import('./src/components/common/ProfileMenuIcon.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ScrollIndicator: typeof import('./src/components/common/ScrollIndicator.vue')['default']
+    SealMark: typeof import('./src/components/common/SealMark.vue')['default']
     SeasonSection: typeof import('./src/components/home/SeasonSection.vue')['default']
     SectionTitle: typeof import('./src/components/common/SectionTitle.vue')['default']
-  }
-  export interface GlobalDirectives {
-    vLoading: typeof import('element-plus/es')['ElLoadingDirective']
+    StateBlock: typeof import('./src/components/common/StateBlock.vue')['default']
+    TechFrame: typeof import('./src/components/map/TechFrame.vue')['default']
+    WeatherHistory: typeof import('./src/components/screen/WeatherHistory.vue')['default']
   }
 }

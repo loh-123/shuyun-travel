@@ -2,19 +2,21 @@
 /**
  * AI 管家（项目核心页）
  * - 三栏布局：左 280 会话列表 / 中 flex 对话窗口 / 右 360 上下文面板
- * - 流式接收：EventSource 订阅 /api/ai/chat/stream（失败自动降级为 POST /api/ai/chat）
+ * - 流式接收：fetch + ReadableStream 读取 POST /api/ai/chat 的 SSE（女娲智能体）
  * - Markdown 渲染：marked + DOMPurify（防 XSS）
  * - 上下文面板：规则识别意图与实体 → 实时天气 + 动态推荐景点 + 快捷工具
+ * - 行程消息支持一键「加入我的行程」（复用 /user/trip 接口，不改其它页面）
  * - 响应式：<1280 收起右栏（按钮呼出），<768 只留中栏（左右用抽屉）
  */
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import gsap from 'gsap'
 
 import request, { TOKEN_KEY } from '@/api/request'
+import { streamChat, getSharedSessionId, setSharedSessionId } from '@/composables/useAiChatStream'
 import GoldButton from '@/components/common/GoldButton.vue'
 
 /* ------------------------------------------------------------
@@ -34,6 +36,12 @@ interface ChatMessage {
   time: string
   /** 用户消息可能带图片占位 */
   imageName?: string
+  /** AI 思考过程（type=THINK） */
+  reasoning?: string
+  /** 思考用时（秒） */
+  reasoningSeconds?: number
+  /** 思考过程是否展开（默认展开） */
+  reasoningOpen?: boolean
 }
 
 interface ScenicItem {
@@ -62,6 +70,18 @@ interface WeatherInfo {
   wind?: string
   uv?: string
   daily?: WeatherDay[]
+}
+
+/** 工具调用记录（右侧「工具调用」面板） */
+interface ToolCall {
+  /** 唯一ID（TransitionGroup key） */
+  id: string
+  /** 工具名，如 search_scenic */
+  name: string
+  /** 入参展示串，如 "成都" */
+  args: string
+  /** 耗时（毫秒） */
+  duration: number
 }
 
 /* ------------------------------------------------------------
@@ -93,6 +113,7 @@ const TOOLS = [
  * 状态
  * ---------------------------------------------------------- */
 const router = useRouter()
+const route = useRoute()
 
 const rootEl = ref<HTMLElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
@@ -110,6 +131,12 @@ const sending = ref(false)
 const thinking = ref(false)
 /** 正在流式输出的正文（未落库） */
 const streamingText = ref('')
+/** 正在流式输出的思考过程（未落库） */
+const streamingReasoning = ref('')
+/** 流式思考过程是否展开（默认展开） */
+const streamReasoningOpen = ref(true)
+/** 本轮思考用时（秒） */
+const reasoningSeconds = ref(0)
 /** 是否显示快捷问题 */
 const showQuick = ref(true)
 
@@ -128,6 +155,35 @@ const weather = ref<WeatherInfo | null>(null)
 /** 小屏抽屉 */
 const leftDrawer = ref(false)
 const rightDrawer = ref(false)
+
+/** 宽屏左右栏折叠 */
+const leftHidden = ref(false)
+const rightHidden = ref(false)
+
+/* ---------------- 智能体可视化面板（意图 / 工具 / 记忆） ---------------- */
+/** 工具调用流水（最新在最上方，最多 6 条） */
+const toolCalls = ref<ToolCall[]>([])
+/** 工具调用最多保留条数 */
+const MAX_TOOLS = 6
+/** 本轮是否已收到后端 tool 事件（收到则停用本地模拟） */
+let backendToolSeen = false
+/** 本地模拟工具调用的定时器（切换回合 / 卸载时清理） */
+let simTimers: number[] = []
+/** 后端返回的意图 / 实体（流式首帧，缺省时回退关键词匹配） */
+const aiIntent = ref('')
+const aiEntities = ref<{ city?: string; days?: string; prefs?: string[] } | null>(null)
+/** 用户画像（记忆体种子）：来自 GET /ai/profile，登录后可用 */
+const profile = ref<{ interests?: string; companion?: string; budget?: string; region?: string } | null>(null)
+/** 移动端：意图面板是否折叠 */
+const intentCollapsed = ref(false)
+
+function toggleLeft() {
+  leftHidden.value = !leftHidden.value
+}
+
+function toggleRight() {
+  rightHidden.value = !rightHidden.value
+}
 
 /** 断点 */
 const isNarrow = ref(false)
@@ -183,6 +239,94 @@ const recommends = computed(() => {
       (!!entities.value.city && s.cityName === entities.value.city),
   )
   return (matched.length ? matched : scenicList.value).slice(0, 3)
+})
+
+/* ------------------------------------------------------------
+ * 面板 1 · 意图识别
+ * ---------------------------------------------------------- */
+/** 意图面板展示：优先后端返回，其次关键词匹配 */
+const displayIntent = computed(() => aiIntent.value || intent.value)
+
+/** 识别实体 chips：优先后端，其次前端抽取（目的地 / 天数 / 偏好） */
+const entityChips = computed<string[]>(() => {
+  const be = aiEntities.value
+  const city = be?.city || entities.value.city
+  const days = be?.days || entities.value.days
+  const prefs = be?.prefs?.length ? be.prefs : entities.value.prefs
+  const chips: string[] = []
+  if (city) {
+    chips.push(city)
+  }
+  if (days) {
+    chips.push(`${days} 天`)
+  }
+  prefs.forEach((p) => chips.push(p))
+  return chips
+})
+
+/* ------------------------------------------------------------
+ * 面板 3 · 记忆体
+ * ---------------------------------------------------------- */
+/**
+ * 记忆体：用户画像（接口） + 对话中实时抽取，去重，最多 6 条。
+ * 对话内容变化时自动重算，实现「对话中如有更新则实时刷新」。
+ */
+const memoryList = computed<string[]>(() => {
+  const out: string[] = []
+  const push = (s: string) => {
+    if (s && !out.includes(s)) {
+      out.push(s)
+    }
+  }
+
+  // 1) 用户画像接口
+  const p = profile.value
+  if (p) {
+    if (p.interests) {
+      p.interests
+        .split(/[,，、/]/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((i) => push(`用户喜欢${i}类景点`))
+    }
+    if (p.companion) {
+      push(`用户带${p.companion}出行`)
+    }
+    if (p.budget) {
+      push(`用户预算 ${p.budget} 元`)
+    }
+    if (p.region) {
+      push(`用户常驻${p.region}`)
+    }
+  }
+
+  // 2) 对话中实时抽取
+  const text = messages.value
+    .filter((m) => m.role === 'user')
+    .map((m) => m.content)
+    .join(' ')
+  if (text) {
+    const interestKeys = ['文化', '自然', '摄影', '美食', '古镇', '博物馆', '亲子', '滑雪', '徒步', '温泉']
+    interestKeys.forEach((k) => {
+      if (text.includes(k)) {
+        push(`用户喜欢${k}类景点`)
+      }
+    })
+    if (/父母|爸妈|老人|长辈/.test(text)) {
+      push('用户带父母出行')
+    } else if (/孩子|小孩|亲子|宝宝/.test(text)) {
+      push('用户带孩子出行')
+    } else if (/情侣|爱人|老婆|老公/.test(text)) {
+      push('用户与情侣出行')
+    } else if (/朋友|同学|结伴/.test(text)) {
+      push('用户与朋友出行')
+    }
+    const budget = text.match(/(\d{3,6})\s*(元|块钱|预算|左右)/)
+    if (budget) {
+      push(`用户预算 ${budget[1]} 元`)
+    }
+  }
+  return out.slice(0, 6)
 })
 
 /* ------------------------------------------------------------
@@ -247,6 +391,8 @@ async function loadSessions() {
 /** 打开会话：拉取历史 */
 async function openSession(sessionId: string) {
   activeSessionId.value = sessionId
+  // 共享 sessionId：与右下角浮层对话窗保持同一会话
+  setSharedSessionId(sessionId)
   leftDrawer.value = false
   streamingText.value = ''
   showQuick.value = false
@@ -356,6 +502,24 @@ async function loadScenics() {
   }
 }
 
+/**
+ * 读取用户画像（记忆体种子）。
+ * 未登录 / 接口不可用时静默降级为 null（面板仍会从对话中实时抽取）。
+ */
+async function loadProfile() {
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    profile.value = null
+    return
+  }
+  try {
+    const res = await request.get('/ai/profile', { silent: true })
+    const data = res.data as { interests?: string; companion?: string; budget?: string; region?: string } | null
+    profile.value = data && Object.keys(data).length ? data : null
+  } catch {
+    profile.value = null
+  }
+}
+
 /** 查天气（提到城市才查） */
 async function loadWeather(city: string) {
   if (!city) {
@@ -373,54 +537,70 @@ async function loadWeather(city: string) {
 /* ------------------------------------------------------------
  * 流式对话
  * ---------------------------------------------------------- */
-/** 流式返回的真实 sessionId */
-let streamSessionId = ''
+/** 本轮思考开始的时刻（用于计算思考用时） */
+let reasoningStartAt = 0
+
+/* ------------------------------------------------------------
+ * 面板 2 · 工具调用
+ * ---------------------------------------------------------- */
+/** 清理本地模拟工具的定时器 */
+function clearSimTimers() {
+  simTimers.forEach((id) => window.clearTimeout(id))
+  simTimers = []
+}
+
+/** 追加一条工具调用（最新在最上方，最多 6 条） */
+function pushTool(name: string, args: string, duration: number) {
+  const item: ToolCall = {
+    id: `t-${Date.now()}-${Math.random().toString(16).slice(2, 7)}`,
+    name,
+    args,
+    duration,
+  }
+  toolCalls.value = [item, ...toolCalls.value].slice(0, MAX_TOOLS)
+}
 
 /**
- * SSE 流式接收
- * 注：浏览器 EventSource 无法自定义请求头，token 通过查询参数传给后端
+ * 本地模拟工具调用（后端暂不推送 tool 事件时的可视化占位）。
+ * 依据本轮意图与实体推断工具序列，并错峰推入面板，呈现「智能体在调度工具」。
  */
-function streamChat(text: string, sessionId: string) {
-  return new Promise<void>((resolve, reject) => {
-    const token = localStorage.getItem(TOKEN_KEY) || ''
-    const url =
-      `/api/ai/chat/stream?message=${encodeURIComponent(text)}` +
-      `&sessionId=${encodeURIComponent(sessionId)}` +
-      `&token=${encodeURIComponent(token)}`
-
-    const es = new EventSource(url)
-    let received = false
-    let settled = false
-
-    const finish = (err?: Error) => {
-      if (settled) {
-        return
+function scheduleSimulatedTools(text: string) {
+  const plan = deriveToolPlan(text)
+  plan.forEach((p, i) => {
+    const id = window.setTimeout(() => {
+      if (!backendToolSeen) {
+        pushTool(p.name, p.args, p.duration)
       }
-      settled = true
-      es.close()
-      if (err) {
-        reject(err)
-      } else {
-        resolve()
-      }
-    }
-
-    es.addEventListener('session', (ev: MessageEvent) => {
-      streamSessionId = String(ev.data || '')
-    })
-
-    es.addEventListener('message', (ev: MessageEvent) => {
-      received = true
-      thinking.value = false
-      streamingText.value = String(ev.data ?? '')
-      scrollToBottom()
-    })
-
-    es.addEventListener('done', () => finish())
-
-    es.onerror = () => finish(received ? undefined : new Error('SSE failed'))
-    window.setTimeout(() => finish(received ? undefined : new Error('SSE timeout')), 45000)
+    }, 320 + i * 420)
+    simTimers.push(id)
   })
+}
+
+/** 依据文本意图 / 实体推断工具序列（名称与后端 Function Calling 对齐） */
+function deriveToolPlan(text: string): { name: string; args: string; duration: number }[] {
+  const city = entities.value.city || '成都'
+  const days = entities.value.days || '3'
+  const prefs = entities.value.prefs.join('、')
+  const rnd = (base: number) => base + Math.floor(Math.random() * 90)
+  const plan: { name: string; args: string; duration: number }[] = []
+
+  if (/行程|规划|路线|几日|几天|安排|几日游/.test(text)) {
+    plan.push({ name: 'search_scenic', args: `"${city}"`, duration: rnd(120) })
+    plan.push({ name: 'plan_route', args: `${days}天${prefs ? ', ' + prefs : ''}`, duration: rnd(300) })
+  }
+  if (/天气|下雨|气温|穿什么|紫外线|风力/.test(text)) {
+    plan.push({ name: 'get_weather', args: `"${city}"`, duration: rnd(90) })
+  }
+  if (/美食|川菜|吃|小吃|火锅|甜皮鸭/.test(text)) {
+    plan.push({ name: 'recommend_food', args: `"${city}"`, duration: rnd(150) })
+  }
+  if (/三星堆|川剧|蜀绣|文化|非遗|故事|历史|三国|熊猫/.test(text)) {
+    plan.push({ name: 'search_culture', args: `"${text.slice(0, 8)}"`, duration: rnd(110) })
+  }
+  if (!plan.length) {
+    plan.push({ name: 'search_knowledge', args: `"${city}"`, duration: rnd(95) })
+  }
+  return plan
 }
 
 /** 发送 */
@@ -434,7 +614,16 @@ async function onSend(preset?: string) {
   sending.value = true
   thinking.value = true
   streamingText.value = ''
-  streamSessionId = activeSessionId.value
+  streamingReasoning.value = ''
+  streamReasoningOpen.value = true
+  reasoningSeconds.value = 0
+  reasoningStartAt = Date.now()
+
+  // 新一轮：复位意图/工具面板，并启动工具调用可视化
+  aiIntent.value = ''
+  aiEntities.value = null
+  backendToolSeen = false
+  clearSimTimers()
 
   messages.value.push({
     id: `u-${Date.now()}`,
@@ -447,6 +636,9 @@ async function onSend(preset?: string) {
   input.value = ''
   scrollToBottom()
 
+  // 工具面板：后端若未推送 tool 事件，则由本地按意图/实体模拟
+  scheduleSimulatedTools(text)
+
   // 用户消息滑入动画
   nextTick(() => {
     const els = listEl.value?.querySelectorAll('.msg--user')
@@ -456,36 +648,78 @@ async function onSend(preset?: string) {
     }
   })
 
+  let answer = ''
+  let answerReasoning = ''
   try {
-    await streamChat(text, activeSessionId.value)
-  } catch {
-    // 流式不可用：退化为普通请求
-    try {
-      const res = await request.post('/ai/chat', {
-        message: text,
-        sessionId: activeSessionId.value || undefined,
-      })
-      streamingText.value = res.data?.reply ?? ''
-      streamSessionId = res.data?.sessionId ?? streamSessionId
-    } catch {
-      streamingText.value = '抱歉，管家暂时无法应答，请稍后再试。'
+    const res = await streamChat(
+      text,
+      activeSessionId.value,
+      (full, reasoning) => {
+        thinking.value = false
+        streamingText.value = full
+        if (reasoning) {
+          streamingReasoning.value = reasoning
+        }
+        // 正文开始输出即认定思考结束，记录用时
+        if (full && !reasoningSeconds.value) {
+          reasoningSeconds.value = Math.max(1, Math.round((Date.now() - reasoningStartAt) / 1000))
+        }
+        scrollToBottom()
+      },
+      (ev) => {
+        // 后端结构化事件：意图首帧 / 工具事件
+        if (ev.type === 'intent') {
+          if (ev.intent) {
+            aiIntent.value = ev.intent
+          }
+          if (ev.entities) {
+            aiEntities.value = ev.entities
+          }
+        } else if (ev.type === 'tool' && ev.name) {
+          // 一旦收到后端工具事件，停用本地模拟，改用真实数据
+          if (!backendToolSeen) {
+            backendToolSeen = true
+            clearSimTimers()
+            toolCalls.value = []
+          }
+          pushTool(ev.name, ev.args || '', ev.duration || 0)
+        }
+      },
+    )
+    answer = res.content
+    answerReasoning = res.reasoning
+    // 共享 sessionId：与右下角浮层对话窗保持同一会话
+    if (res.sessionId) {
+      setSharedSessionId(res.sessionId)
+      if (!activeSessionId.value) {
+        activeSessionId.value = res.sessionId
+      }
     }
+  } catch {
+    // 网络 / 服务异常：保留已收到的部分内容，否则给出友好提示
+    answer = streamingText.value
+    answerReasoning = streamingReasoning.value
+  }
+  if (!answer) {
+    answer = '抱歉，管家暂时无法应答，请稍后再试。'
   }
 
-  // 落地 AI 消息
+  // 落地 AI 消息（含思考过程，默认展开）
   messages.value.push({
     id: `a-${Date.now()}`,
     role: 'assistant',
-    content: streamingText.value,
+    content: answer,
     time: nowText(),
+    reasoning: answerReasoning || undefined,
+    reasoningSeconds: answerReasoning ? reasoningSeconds.value || undefined : undefined,
+    reasoningOpen: true,
   })
   streamingText.value = ''
+  streamingReasoning.value = ''
+  reasoningSeconds.value = 0
   thinking.value = false
   sending.value = false
 
-  if (!activeSessionId.value && streamSessionId) {
-    activeSessionId.value = streamSessionId
-  }
   await loadSessions()
   scrollToBottom()
 }
@@ -507,6 +741,88 @@ async function copyMessage(content: string) {
     ElMessage.success('已复制')
   } catch {
     ElMessage.info('复制失败，请手动选择')
+  }
+}
+
+/** 判断 AI 回复是否包含行程序列（Day 1 / Day1） */
+function isTripReply(content: string): boolean {
+  return /(^|\n)\s*[-*•]?\s*\**\s*day\s*\d+/i.test(content || '')
+}
+
+/** 行程解析结果 */
+interface ParsedTrip {
+  title: string
+  days: number
+  dayList: { dayIndex: number; scenicName: string; tips: string }[]
+}
+
+/**
+ * 从 AI 回复中解析出行程结构（标题 + 每日明细）
+ * 规则：标题优先取加粗短语，其次取首行；以「Day N」为分界切分每日内容
+ */
+function parseTrip(content: string): ParsedTrip {
+  const text = (content || '').trim()
+  const bold = text.match(/\*\*([^*\n]{2,24})\*\*/)
+  const firstLine = text.split('\n')[0].replace(/[#>*`]/g, '').trim()
+  const title = (bold ? bold[1] : firstLine.slice(0, 20)).trim() || '我的四川行程'
+
+  // 在「Day N」之前切分，每段即一天
+  const parts = text.split(/(?=(?:^|\n)\s*[-*•]?\s*\**\s*day\s*\d+)/i)
+  const dayList: ParsedTrip['dayList'] = []
+  parts.forEach((raw) => {
+    if (!/^\s*[-*•]?\s*\**\s*day\s*\d+/i.test(raw)) {
+      return
+    }
+    // 去掉「Day N」标记，只取当天第一段（截掉其后的补充说明）
+    let body = raw.replace(/^\s*[-*•]?\s*\**\s*day\s*\d+\s*\**/i, '')
+    body = body.split(/\n{2,}/)[0]
+    body = body.replace(/\*\*/g, '').replace(/^[:：]\s*/, '').replace(/\s+/g, ' ').trim()
+    const head = body.split(/[:：]/)[0].trim()
+    const scenicName = head && head.length <= 18 ? head : body.slice(0, 24)
+    dayList.push({ dayIndex: dayList.length + 1, scenicName, tips: body })
+  })
+
+  if (!dayList.length) {
+    dayList.push({ dayIndex: 1, scenicName: title, tips: text.replace(/\*\*/g, '') })
+  }
+  return { title, days: dayList.length, dayList }
+}
+
+/** 正在加入行程的消息 id（用于按钮禁用态） */
+const tripSavingId = ref('')
+
+/** 把一条 AI 行程回复保存到「我的行程」（复用现成 /user/trip 接口） */
+async function addToTrip(msg: ChatMessage) {
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    ElMessage.warning('请先登录后再加入行程')
+    router.push('/login')
+    return
+  }
+  const parsed = parseTrip(msg.content)
+  tripSavingId.value = msg.id
+  try {
+    await request.post('/user/trip', {
+      title: parsed.title,
+      days: parsed.days,
+      companion: '',
+      interests: '',
+      budget: null,
+      status: 1,
+      dayList: parsed.dayList.map((d) => ({
+        dayIndex: d.dayIndex,
+        date: null,
+        scenicName: d.scenicName,
+        stayDuration: null,
+        transport: null,
+        food: null,
+        tips: d.tips,
+      })),
+    })
+    ElMessage.success('已加入「我的行程」')
+  } catch {
+    // 错误提示由响应拦截器统一处理
+  } finally {
+    tripSavingId.value = ''
   }
 }
 
@@ -606,6 +922,13 @@ function onResize() {
   isSmall.value = w < 768
 }
 
+// 小屏：意图面板默认折叠，节省竖向空间（用户可手动展开）
+watch(isSmall, (v) => {
+  if (v) {
+    intentCollapsed.value = true
+  }
+})
+
 /* ------------------------------------------------------------
  * 生命周期
  * ---------------------------------------------------------- */
@@ -615,9 +938,27 @@ onMounted(async () => {
   onResize()
   window.addEventListener('resize', onResize)
 
-  await Promise.all([loadSessions(), loadScenics()])
-  if (sessions.value.length) {
-    await openSession(sessions.value[0].sessionId)
+  await Promise.all([loadSessions(), loadScenics(), loadProfile()])
+
+  // 从首页「智能体入口」跳转时携带问题：
+  // - q            填入输入框（用户自己按回车发送）
+  // - q & auto=1   直接自动提交
+  const initialQ = typeof route.query.q === 'string' ? route.query.q.trim() : ''
+  const autoAsk = route.query.auto === '1'
+
+  if (initialQ) {
+    newSession()
+    if (autoAsk) {
+      await onSend(initialQ)
+    } else {
+      input.value = initialQ
+      nextTick(() => inputRef.value?.focus())
+    }
+  } else if (sessions.value.length) {
+    // 优先打开共享会话（与右下角浮层对话窗一致），否则打开最近一条
+    const shared = getSharedSessionId()
+    const target = sessions.value.find((s) => s.sessionId === shared) || sessions.value[0]
+    await openSession(target.sessionId)
   } else {
     newSession()
   }
@@ -637,6 +978,7 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener('resize', onResize)
   recognition?.stop()
+  clearSimTimers()
   ctx?.revert()
   ctx = null
 })
@@ -650,7 +992,11 @@ watch(
 </script>
 
 <template>
-  <div ref="rootEl" class="ai">
+  <div
+    ref="rootEl"
+    class="ai"
+    :class="{ 'is-left-hidden': leftHidden, 'is-right-hidden': rightHidden }"
+  >
     <!-- ================= 左栏：会话列表 ================= -->
     <aside class="ai-side" :class="{ 'is-open': leftDrawer }">
       <GoldButton block class="ai-side__new" @click="newSession">
@@ -662,7 +1008,7 @@ watch(
         新建对话
       </GoldButton>
 
-      <ul class="sessions">
+      <ul class="sessions" data-lenis-prevent>
         <li
           v-for="s in sessions"
           :key="s.sessionId"
@@ -694,6 +1040,28 @@ watch(
 
     <!-- ================= 中栏：对话窗口 ================= -->
     <section class="ai-chat">
+      <!-- 左右栏折叠把手（位于分割线中央） -->
+      <button
+        type="button"
+        class="chat-toggle chat-toggle--left"
+        :title="leftHidden ? '展开会话列表' : '收起会话列表'"
+        @click="toggleLeft"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path :d="leftHidden ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'" />
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="chat-toggle chat-toggle--right"
+        :title="rightHidden ? '展开上下文面板' : '收起上下文面板'"
+        @click="toggleRight"
+      >
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path :d="rightHidden ? 'M15 6l-6 6 6 6' : 'M9 6l6 6-6 6'" />
+        </svg>
+      </button>
+
       <!-- 标题栏 -->
       <header class="chat-head">
         <div class="chat-head__left">
@@ -738,8 +1106,27 @@ watch(
         </div>
       </header>
 
+      <!-- 面板1：意图识别（对话上方） -->
+      <div class="intent" :class="{ 'is-collapsed': intentCollapsed }">
+        <button type="button" class="intent__head" @click="intentCollapsed = !intentCollapsed">
+          <span class="intent__dot" aria-hidden="true" />
+          <span class="intent__title">意图识别</span>
+          <span class="intent__value">{{ displayIntent }}</span>
+          <svg class="intent__caret" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+        <div v-show="!intentCollapsed" class="intent__body">
+          <span class="intent__label">识别实体</span>
+          <span v-if="entityChips.length" class="intent__chips">
+            <i v-for="c in entityChips" :key="c" class="intent__chip">{{ c }}</i>
+          </span>
+          <span v-else class="intent__empty">等待你的问题…</span>
+        </div>
+      </div>
+
       <!-- 消息区 -->
-      <div ref="listEl" class="chat-list">
+      <div ref="listEl" class="chat-list" data-lenis-prevent>
         <!-- 快捷问题 -->
         <div v-if="showQuick && !messages.length" class="quick">
           <div class="quick__mark"><span>蜀</span></div>
@@ -768,6 +1155,29 @@ watch(
           <span v-if="m.role === 'assistant'" class="msg__avatar">蜀</span>
 
           <div class="msg__body">
+            <!-- 思考过程：灰色小字、可折叠、默认展开 -->
+            <div
+              v-if="m.role === 'assistant' && m.reasoning"
+              class="think"
+              :class="{ 'is-open': m.reasoningOpen !== false }"
+            >
+              <button
+                type="button"
+                class="think__head"
+                @click="m.reasoningOpen = m.reasoningOpen === false"
+              >
+                <svg class="think__icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3.2" />
+                  <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M18.7 5.3 17 7M7 17l-1.7 1.7" />
+                </svg>
+                <span class="think__label">已思考{{ m.reasoningSeconds ? `（用时 ${m.reasoningSeconds} 秒）` : '' }}</span>
+                <svg class="think__arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <div v-show="m.reasoningOpen !== false" class="think__body">{{ m.reasoning }}</div>
+            </div>
+
             <div class="msg__bubble">
               <p v-if="m.imageName" class="msg__image">🖼 {{ m.imageName }}</p>
               <div v-if="m.role === 'assistant'" class="md" v-html="renderMd(m.content)" />
@@ -777,6 +1187,15 @@ watch(
             <div class="msg__foot">
               <span class="msg__time">{{ m.time }}</span>
               <button type="button" class="msg__act" @click="copyMessage(m.content)">复制</button>
+              <button
+                v-if="m.role === 'assistant' && isTripReply(m.content)"
+                type="button"
+                class="msg__act msg__act--trip"
+                :disabled="tripSavingId === m.id"
+                @click="addToTrip(m)"
+              >
+                {{ tripSavingId === m.id ? '加入中…' : '加入我的行程' }}
+              </button>
               <button
                 v-if="m.role === 'assistant'"
                 type="button"
@@ -789,19 +1208,36 @@ watch(
           </div>
         </div>
 
-        <!-- 流式输出中 -->
-        <div v-if="streamingText" class="msg msg--assistant">
+        <!-- 流式输出中（含思考过程） -->
+        <div v-if="streamingText || streamingReasoning" class="msg msg--assistant">
           <span class="msg__avatar">蜀</span>
           <div class="msg__body">
-            <div class="msg__bubble">
+            <!-- 思考过程：有正文后显示「已思考」，否则「正在深度思考」 -->
+            <div v-if="streamingReasoning" class="think" :class="{ 'is-open': streamReasoningOpen }">
+              <button type="button" class="think__head" @click="streamReasoningOpen = !streamReasoningOpen">
+                <svg class="think__icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3.2" />
+                  <path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5.3 5.3l1.7 1.7M17 17l1.7 1.7M18.7 5.3 17 7M7 17l-1.7 1.7" />
+                </svg>
+                <span class="think__label">
+                  {{ streamingText ? `已思考${reasoningSeconds ? `（用时 ${reasoningSeconds} 秒）` : ''}` : '正在深度思考…' }}
+                </span>
+                <svg class="think__arrow" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <div v-show="streamReasoningOpen" class="think__body">{{ streamingReasoning }}</div>
+            </div>
+
+            <div v-if="streamingText" class="msg__bubble">
               <div class="md" v-html="renderMd(streamingText)" />
               <span class="msg__caret" />
             </div>
           </div>
         </div>
 
-        <!-- 思考中 -->
-        <div v-if="thinking && !streamingText" class="msg msg--assistant">
+        <!-- 思考中（尚未产生任何增量） -->
+        <div v-if="thinking && !streamingText && !streamingReasoning" class="msg msg--assistant">
           <span class="msg__avatar">蜀</span>
           <div class="msg__body">
             <div class="msg__bubble msg__bubble--thinking">
@@ -865,30 +1301,38 @@ watch(
     </section>
 
     <!-- ================= 右栏：上下文面板 ================= -->
-    <aside class="ai-context" :class="{ 'is-open': rightDrawer }">
-      <!-- 当前会话信息 -->
+    <aside class="ai-context" :class="{ 'is-open': rightDrawer }" data-lenis-prevent>
+      <!-- 面板2：工具调用（新记录从顶部滑入，最多 6 条） -->
       <div class="panel">
-        <h3 class="panel__title">当前会话</h3>
-        <div class="ctx-row">
-          <span class="ctx-row__label">意图</span>
-          <span class="ctx-row__value ctx-row__value--tag">{{ intent }}</span>
+        <h3 class="panel__title">工具调用</h3>
+        <div class="tools-feed">
+          <TransitionGroup name="tslide">
+            <div v-for="tc in toolCalls" :key="tc.id" class="tool-call">
+              <span class="tool-call__name">{{ tc.name }}</span>
+              <span v-if="tc.args" class="tool-call__args">({{ tc.args }})</span>
+              <span class="tool-call__meta">
+                <span v-if="tc.duration" class="tool-call__dur">{{ tc.duration }}ms</span>
+                <span class="tool-call__ok" aria-hidden="true">✓</span>
+              </span>
+            </div>
+          </TransitionGroup>
+          <p v-if="!toolCalls.length" class="tools-feed__empty">智能体尚未调用工具</p>
+          <p v-if="sending" class="tools-feed__live">
+            <span class="dot" /><span class="dot" /><span class="dot" /> 正在调度工具…
+          </p>
         </div>
-        <div class="ctx-row">
-          <span class="ctx-row__label">目的地</span>
-          <span class="ctx-row__value">{{ entities.city || '待识别' }}</span>
-        </div>
-        <div class="ctx-row">
-          <span class="ctx-row__label">天数</span>
-          <span class="ctx-row__value">{{ entities.days ? entities.days + ' 天' : '待识别' }}</span>
-        </div>
-        <div class="ctx-row">
-          <span class="ctx-row__label">偏好</span>
-          <span class="ctx-row__value">{{ entities.prefs.length ? entities.prefs.join(' · ') : '待识别' }}</span>
-        </div>
+      </div>
 
-        <p v-if="thinking" class="ctx-thinking">
-          <span class="dot" /><span class="dot" /><span class="dot" /> 正在为你查询…
-        </p>
+      <!-- 面板3：记忆体 -->
+      <div class="panel">
+        <h3 class="panel__title">记忆体</h3>
+        <p class="mem__hint">已记住：</p>
+        <ul v-if="memoryList.length" class="mem">
+          <li v-for="m in memoryList" :key="m" class="mem__item">
+            <span class="mem__dot" aria-hidden="true" />{{ m }}
+          </li>
+        </ul>
+        <p v-else class="mem__empty">还没有积累到你的偏好，聊几句吧</p>
       </div>
 
       <!-- 天气 -->
@@ -959,25 +1403,32 @@ watch(
  * 三栏布局
  * ========================================================== */
 .ai {
+  --ai-left: 416px;
+  --ai-right: 468px;
+  /* 固定视口：顶部让开导航栏、底部贴边；整页不滚动，仅内部各区域各自滚动 */
+  position: fixed;
+  top: $nav-height;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: $z-content;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr) 360px;
-  gap: clamp(12px, 1.2vw, 20px);
+  grid-template-columns: var(--ai-left) minmax(0, 1fr) var(--ai-right);
+  /* 单行铺满且允许收缩，避免内容把行高撑开 */
+  grid-auto-rows: minmax(0, 1fr);
   width: 100%;
-  height: calc(100vh - 68px);
-  min-height: 560px;
-  padding: clamp(12px, 1.2vw, 20px) $gutter;
+  overflow: hidden;
+  background: $color-paper;
 }
 
 /* ---------------- 左栏：会话列表 ---------------- */
 .ai-side {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: clamp(14px, 1.4vw, 18px);
-  border: 1px solid $color-border-gold;
-  border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-md;
+  gap: 12px;
+  padding: 18px 14px;
+  border-right: 1px solid $color-border-gold-light;
+  background: rgba(var(--sy-surface-rgb), 0.42);
   overflow: hidden;
   will-change: transform;
 }
@@ -1008,7 +1459,7 @@ watch(
     transform $duration-fast $ease-out-expo;
 
   &:hover {
-    background: rgba(140, 31, 40, 0.07);
+    background: rgba(122, 26, 34, 0.07);
     transform: translateX(3px);
 
     .sessions__del {
@@ -1038,7 +1489,7 @@ watch(
   width: 8px;
   height: 8px;
   flex-shrink: 0;
-  border: 1px solid rgba(201, 168, 106, 0.7);
+  border: 1px solid rgba(212, 179, 116, 0.7);
   border-radius: 50%;
 }
 
@@ -1052,27 +1503,27 @@ watch(
 
 .sessions__title {
   font-family: $font-body;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   letter-spacing: 0.04em;
   color: $color-text-dark;
   @include text-ellipsis(1);
 }
 
 .sessions__time {
-  font-size: 11px;
-  color: rgba(26, 26, 26, 0.42);
+  font-size: 16.5px;
+  color: rgba(var(--sy-text-rgb), 0.42);
 }
 
 .sessions__del {
   flex-shrink: 0;
-  color: rgba(26, 26, 26, 0.45);
+  color: rgba(var(--sy-text-rgb), 0.45);
   opacity: 0;
   transition:
     opacity $duration-fast $ease-out-expo,
     color $duration-fast $ease-out-expo;
 
   &:hover {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 }
 
@@ -1080,8 +1531,8 @@ watch(
   flex: 1;
   display: grid;
   place-items: center;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.4);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.4);
   text-align: center;
 }
 
@@ -1090,7 +1541,7 @@ watch(
   align-items: center;
   gap: 10px;
   padding-top: 12px;
-  border-top: 1px dashed rgba(140, 31, 40, 0.15);
+  border-top: 1px dashed rgba(122, 26, 34, 0.15);
 }
 
 .ai-side__avatar {
@@ -1099,27 +1550,30 @@ watch(
   height: 34px;
   border: 1px solid $color-gold;
   border-radius: 50%;
-  background: rgba(201, 168, 106, 0.14);
+  background: rgba(212, 179, 116, 0.14);
   font-family: $font-title;
   font-weight: 900;
-  color: $color-primary;
+  font-size: calc(#{$fs-body} * 1.5);
+  color: var(--sy-accent);
 }
 
 .ai-side__name {
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.7);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.7);
   @include text-ellipsis(1);
 }
 
 /* ---------------- 中栏：对话窗口 ---------------- */
 .ai-chat {
+  position: relative;
+  z-index: 3;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  border: 1px solid $color-border-gold;
-  border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.74);
-  box-shadow: $shadow-md;
+  min-width: 0;
+  /* 关键：允许纵向收缩，否则 flex 子项默认 min-height:auto 会撑破容器 */
+  min-height: 0;
+  overflow: visible;
+  background: transparent;
   will-change: transform;
 }
 
@@ -1128,8 +1582,12 @@ watch(
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: clamp(12px, 1.3vw, 18px) clamp(14px, 1.6vw, 24px);
-  background: linear-gradient(100deg, $color-ink, #16233a 60%, #1d2436);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
+  padding: 14px max(24px, calc((100% - 1120px) / 2));
+  border-bottom: 1px solid $color-border-gold-light;
+  background: rgba(var(--sy-paper-rgb), 0.66);
 }
 
 .chat-head__left,
@@ -1151,49 +1609,129 @@ watch(
 .chat-head__title {
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(14px, 1.2vw, 17px);
-  letter-spacing: 0.16em;
-  color: $color-gold;
+  font-size: clamp(22.5px, 1.8vw, 27px);
+  letter-spacing: 0.14em;
+  color: var(--sy-accent);
 }
 
 .chat-head__badge {
-  padding: 2px 8px;
-  border: 1px solid rgba(87, 201, 138, 0.5);
+  padding: 2px 10px;
+  border: 1px solid rgba(58, 90, 64, 0.28);
   border-radius: $radius-pill;
-  font-size: 11px;
+  background: rgba(58, 90, 64, 0.08);
+  font-size: 16.5px;
   letter-spacing: 0.1em;
-  color: #8fe0b4;
+  color: $color-bamboo;
 }
 
 .chat-head__icon {
   @include flex-center;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(201, 168, 106, 0.35);
+  border: 1px solid rgba(212, 179, 116, 0.42);
   border-radius: $radius-md;
-  color: $color-gold;
+  color: rgba(var(--sy-text-rgb), 0.66);
   transition:
+    color $duration-fast $ease-out-expo,
     background-color $duration-fast $ease-out-expo,
     border-color $duration-fast $ease-out-expo;
 
   &:hover {
     border-color: $color-gold;
-    background: rgba(201, 168, 106, 0.16);
+    background: rgba(212, 179, 116, 0.16);
+    color: var(--sy-accent);
+  }
+}
+
+/* ---------------- 左右栏折叠把手（分割线中央） ---------------- */
+.chat-toggle {
+  position: absolute;
+  top: 50%;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 46px;
+  border: 1px solid $color-border-gold;
+  border-radius: $radius-pill;
+  background: rgba(var(--sy-paper-rgb), 0.94);
+  color: rgba(var(--sy-text-rgb), 0.6);
+  box-shadow: $shadow-sm;
+  cursor: pointer;
+  transition:
+    color $duration-fast $ease-out-expo,
+    border-color $duration-fast $ease-out-expo,
+    background-color $duration-fast $ease-out-expo;
+
+  &:hover {
+    border-color: $color-gold;
+    background: rgba(212, 179, 116, 0.16);
+    color: var(--sy-accent);
+  }
+}
+
+.chat-toggle--left {
+  left: 0;
+  transform: translate(-50%, -50%);
+}
+
+.chat-toggle--right {
+  right: 0;
+  transform: translate(50%, -50%);
+}
+
+/* 收起后把手贴到屏幕边缘内侧，便于再次展开 */
+@media (min-width: 769px) {
+  .ai.is-left-hidden {
+    --ai-left: 0px;
+  }
+
+  .ai.is-left-hidden .ai-side {
+    display: none;
+  }
+
+  .ai.is-left-hidden .chat-toggle--left {
+    left: 10px;
+    transform: translate(0, -50%);
+  }
+}
+
+@media (min-width: 1281px) {
+  .ai.is-right-hidden {
+    --ai-right: 0px;
+  }
+
+  .ai.is-right-hidden .ai-context {
+    display: none;
+  }
+
+  .ai.is-right-hidden .chat-toggle--right {
+    right: 10px;
+    transform: translate(0, -50%);
   }
 }
 
 .chat-list {
   flex: 1;
+  /* 关键：消息区独立滚动的前提，令其可被压缩到容器高度内 */
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  padding: clamp(18px, 2vw, 30px) clamp(14px, 1.8vw, 30px);
+  gap: 22px;
+  padding: 28px max(24px, calc((100% - 1120px) / 2)) 24px;
   overflow-y: auto;
+  /* 滚到尽头不再把滚动传递给页面，根除双重滚动 */
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
 }
 
 /* 快捷问题 */
 .quick {
-  @include flex-center(column);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 14px;
   padding-block: clamp(16px, 4vh, 54px);
   text-align: center;
@@ -1203,13 +1741,13 @@ watch(
   @include flex-center;
   width: 64px;
   height: 64px;
-  border: 1px solid rgba(201, 168, 106, 0.6);
+  border: 1px solid rgba(212, 179, 116, 0.6);
   border-radius: $radius-lg;
-  background-color: rgba(201, 168, 106, 0.08);
+  background-color: rgba(212, 179, 116, 0.08);
   background-image: $pattern-brocade;
   font-family: $font-title;
   font-weight: 900;
-  font-size: 26px;
+  font-size: 39px;
   color: $color-gold;
 
   span {
@@ -1221,15 +1759,15 @@ watch(
 .quick__title {
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(17px, 1.5vw, 22px);
+  font-size: clamp(25.5px, 2.25vw, 33px);
   letter-spacing: 0.1em;
   color: $color-ink;
 }
 
 .quick__sub {
   font-family: $font-body;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.55);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.55);
 }
 
 .quick__list {
@@ -1242,12 +1780,12 @@ watch(
 
 .quick__item {
   padding: 9px 18px;
-  border: 1px solid rgba(201, 168, 106, 0.5);
+  border: 1px solid rgba(212, 179, 116, 0.5);
   border-radius: $radius-pill;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(var(--sy-surface-rgb), 0.6);
   font-family: $font-body;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.78);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.78);
   transition:
     border-color $duration-normal $ease-out-expo,
     color $duration-normal $ease-out-expo,
@@ -1256,7 +1794,7 @@ watch(
 
   &:hover {
     border-color: $color-gold;
-    color: $color-primary;
+    color: var(--sy-accent);
     transform: translateY(-2px);
     box-shadow: $shadow-sm;
   }
@@ -1280,54 +1818,57 @@ watch(
 /* AI 头像：小「蜀」字印章 */
 .msg__avatar {
   @include flex-center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   flex-shrink: 0;
-  border: 1px solid $color-gold;
-  border-radius: $radius-sm;
-  background: $color-primary;
+  border: 1px solid $color-border-gold;
+  border-radius: 50%;
+  background: rgba(212, 179, 116, 0.14);
   font-family: $font-title;
   font-weight: 900;
-  font-size: 15px;
-  color: $color-gold;
+  font-size: 21px;
+  color: var(--sy-accent);
 }
 
 .msg__body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  max-width: 70%;
+  gap: 8px;
+  max-width: 100%;
   min-width: 0;
 }
 
 .msg--user .msg__body {
   align-items: flex-end;
+  max-width: 78%;
 }
 
 .msg__bubble {
-  padding: 20px;
+  padding: 2px 0;
   border-radius: $radius-lg;
   font-family: $font-body;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-body} * 1.5);
   line-height: 1.9;
   word-break: break-word;
 }
 
+/* AI 消息：去掉气泡框，贴近 Codex / DeepSeek 的正文排版 */
 .msg--assistant .msg__bubble {
-  border: 1px solid rgba(201, 168, 106, 0.4);
-  background: rgba(255, 255, 255, 0.9);
-  color: rgba(26, 26, 26, 0.84);
+  padding: 0;
+  background: transparent;
+  color: rgba(var(--sy-text-rgb), 0.86);
 }
 
 .msg--user .msg__bubble {
-  background: linear-gradient(120deg, $color-primary, #6e141c);
-  color: $color-text-light;
-  box-shadow: 0 6px 18px rgba(140, 31, 40, 0.22);
+  padding: 12px 18px;
+  border: 1px solid rgba(212, 179, 116, 0.38);
+  background: rgba(212, 179, 116, 0.14);
+  color: $color-text-dark;
 }
 
 .msg__image {
   margin-bottom: 8px;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   opacity: 0.9;
 }
 
@@ -1336,18 +1877,39 @@ watch(
   align-items: center;
   gap: 12px;
   padding-inline: 4px;
-  font-size: 12px;
-  color: rgba(26, 26, 26, 0.42);
+  font-size: 18px;
+  color: rgba(var(--sy-text-rgb), 0.42);
 }
 
 .msg__act {
-  font-size: 12px;
+  font-size: 18px;
   letter-spacing: 0.06em;
-  color: rgba(26, 26, 26, 0.5);
+  color: rgba(var(--sy-text-rgb), 0.5);
   transition: color $duration-fast $ease-out-expo;
 
   &:hover {
-    color: $color-primary;
+    color: var(--sy-accent);
+  }
+}
+
+/* 「加入我的行程」：胶囊按钮，用主题金色强调，与普通操作区分 */
+.msg__act--trip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 14px;
+  border: 1px solid rgba(212, 179, 116, 0.6);
+  border-radius: 999px;
+  color: var(--sy-accent);
+
+  &:hover:not(:disabled) {
+    border-color: var(--sy-accent);
+    background: rgba(212, 179, 116, 0.12);
+    color: var(--sy-accent);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 }
 
@@ -1387,6 +1949,54 @@ watch(
   }
 }
 
+/* ---------------- 思考过程（仿 DeepSeek，可折叠） ---------------- */
+.think {
+  max-width: 100%;
+}
+
+.think__head {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 4px 4px 0;
+  font-family: $font-body;
+  /* 字号 = 正文字号（$fs-body × 1.5）的 0.7 倍 */
+  font-size: calc(#{$fs-body} * 1.05);
+  color: rgba(var(--sy-text-rgb), 0.5);
+  cursor: pointer;
+  transition: color $duration-fast $ease-out-expo;
+
+  &:hover {
+    color: rgba(var(--sy-text-rgb), 0.72);
+  }
+}
+
+.think__icon,
+.think__arrow {
+  flex-shrink: 0;
+}
+
+.think__arrow {
+  transition: transform $duration-fast $ease-out-expo;
+}
+
+.think.is-open .think__arrow {
+  transform: rotate(180deg);
+}
+
+/* 思考正文：灰色、小字、左侧细描边 */
+.think__body {
+  margin: 6px 0 2px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(var(--sy-text-rgb), 0.16);
+  font-family: $font-body;
+  font-size: calc(#{$fs-body} * 1.05);
+  line-height: 1.75;
+  color: rgba(var(--sy-text-rgb), 0.5);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* 流式输出光标 */
 .msg__caret {
   display: inline-block;
@@ -1413,9 +2023,12 @@ watch(
 .md {
   :deep(h1),
   :deep(h2),
-  :deep(h3) {
+  :deep(h3),
+  :deep(h4),
+  :deep(h5),
+  :deep(h6) {
     margin: 16px 0 8px;
-    font-family: $font-title;
+    font-family: $font-body;
     font-weight: 900;
     letter-spacing: 0.06em;
     color: $color-ink;
@@ -1449,13 +2062,13 @@ watch(
   }
 
   :deep(strong) {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 
   :deep(code) {
     padding: 1px 6px;
     border-radius: $radius-sm;
-    background: rgba(201, 168, 106, 0.18);
+    background: rgba(212, 179, 116, 0.18);
     font-size: 0.92em;
   }
 
@@ -1463,8 +2076,8 @@ watch(
     margin: 10px 0;
     padding: 8px 14px;
     border-left: 2px solid $color-gold;
-    background: rgba(201, 168, 106, 0.1);
-    color: rgba(26, 26, 26, 0.7);
+    background: rgba(212, 179, 116, 0.1);
+    color: rgba(var(--sy-text-rgb), 0.7);
   }
 
   :deep(table) {
@@ -1477,32 +2090,33 @@ watch(
   :deep(th),
   :deep(td) {
     padding: 8px 10px;
-    border: 1px solid rgba(201, 168, 106, 0.4);
+    border: 1px solid rgba(212, 179, 116, 0.4);
     text-align: left;
   }
 
   :deep(th) {
-    background: rgba(201, 168, 106, 0.16);
-    font-family: $font-title;
+    background: rgba(212, 179, 116, 0.16);
+    font-family: $font-body;
   }
 
   :deep(a) {
-    color: $color-primary;
+    color: var(--sy-accent);
     text-decoration: underline;
   }
 
   :deep(hr) {
     margin: 14px 0;
     border: none;
-    border-top: 1px dashed rgba(140, 31, 40, 0.2);
+    border-top: 1px dashed rgba(122, 26, 34, 0.2);
   }
 }
 
 /* ---------------- 输入区 ---------------- */
 .chat-input {
-  padding: clamp(12px, 1.4vw, 18px) clamp(14px, 1.6vw, 24px) clamp(14px, 1.6vw, 20px);
-  border-top: 1px solid rgba(201, 168, 106, 0.32);
-  @include glass(rgba(232, 227, 216, 0.72), 16px);
+  flex-shrink: 0;
+  padding: 16px max(24px, calc((100% - 1120px) / 2)) 20px;
+  border-top: 1px solid $color-border-gold-light;
+  @include glass(rgba(var(--sy-paper-rgb), 0.72), 16px);
 }
 
 .chat-input__chip {
@@ -1511,16 +2125,16 @@ watch(
   gap: 8px;
   margin-bottom: 10px;
   padding: 4px 12px;
-  border: 1px solid rgba(201, 168, 106, 0.5);
+  border: 1px solid rgba(212, 179, 116, 0.5);
   border-radius: $radius-pill;
-  font-size: 12px;
+  font-size: 18px;
   color: $color-bamboo;
 
   button {
-    color: rgba(26, 26, 26, 0.5);
+    color: rgba(var(--sy-text-rgb), 0.5);
 
     &:hover {
-      color: $color-primary;
+      color: var(--sy-accent);
     }
   }
 }
@@ -1530,16 +2144,16 @@ watch(
   align-items: flex-end;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px solid rgba(201, 168, 106, 0.45);
+  border: 1px solid rgba(212, 179, 116, 0.45);
   border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(var(--sy-surface-rgb), 0.85);
   transition:
     border-color $duration-fast $ease-out-expo,
     box-shadow $duration-fast $ease-out-expo;
 
   &:focus-within {
     border-color: $color-gold;
-    box-shadow: 0 0 0 3px rgba(201, 168, 106, 0.16);
+    box-shadow: 0 0 0 3px rgba(212, 179, 116, 0.16);
   }
 }
 
@@ -1555,14 +2169,14 @@ watch(
   border: none;
   background: transparent;
   font-family: $font-body;
-  font-size: $fs-small;
+  font-size: calc(#{$fs-small} * 1.5);
   line-height: 1.7;
   color: $color-text-dark;
   resize: none;
   caret-color: $color-gold;
 
   &::placeholder {
-    color: rgba(26, 26, 26, 0.35);
+    color: rgba(var(--sy-text-rgb), 0.35);
   }
 }
 
@@ -1572,19 +2186,19 @@ watch(
   height: 36px;
   flex-shrink: 0;
   border-radius: $radius-md;
-  color: rgba(26, 26, 26, 0.5);
+  color: rgba(var(--sy-text-rgb), 0.5);
   transition:
     color $duration-fast $ease-out-expo,
     background-color $duration-fast $ease-out-expo;
 
   &:hover {
-    color: $color-primary;
-    background: rgba(140, 31, 40, 0.07);
+    color: var(--sy-accent);
+    background: rgba(122, 26, 34, 0.07);
   }
 
   &.is-on {
-    color: $color-primary;
-    background: rgba(201, 168, 106, 0.2);
+    color: var(--sy-accent);
+    background: rgba(212, 179, 116, 0.2);
   }
 }
 
@@ -1603,7 +2217,7 @@ watch(
 
   &:hover:not(:disabled) {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(201, 168, 106, 0.4);
+    box-shadow: 0 8px 20px rgba(212, 179, 116, 0.4);
   }
 
   &:disabled {
@@ -1614,9 +2228,9 @@ watch(
 
 .chat-input__hint {
   margin-top: 8px;
-  font-size: 12px;
+  font-size: 18px;
   letter-spacing: 0.06em;
-  color: rgba(26, 26, 26, 0.4);
+  color: rgba(var(--sy-text-rgb), 0.4);
   text-align: center;
 }
 
@@ -1624,27 +2238,29 @@ watch(
 .ai-context {
   display: flex;
   flex-direction: column;
-  gap: clamp(12px, 1.2vw, 18px);
+  padding: 18px 16px;
+  border-left: 1px solid $color-border-gold-light;
+  background: rgba(var(--sy-surface-rgb), 0.42);
   overflow-y: auto;
   will-change: transform;
 }
 
 .panel {
-  padding: clamp(14px, 1.5vw, 20px);
-  border: 1px solid $color-border-gold;
-  border-radius: $radius-lg;
-  background: rgba(255, 255, 255, 0.62);
-  box-shadow: $shadow-md;
-  transition:
-    border-color $duration-normal $ease-out-expo,
-    box-shadow $duration-normal $ease-out-expo;
+  padding: 16px 0;
+  border-bottom: 1px solid rgba(212, 179, 116, 0.22);
 
-  /* 发送中：面板高亮 */
-  &.is-live {
-    border-color: $color-gold;
-    box-shadow:
-      0 0 0 3px rgba(201, 168, 106, 0.16),
-      $shadow-md;
+  &:first-child {
+    padding-top: 0;
+  }
+
+  &:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  /* 发送中：标题高亮 */
+  &.is-live .panel__title {
+    color: $color-gold;
   }
 }
 
@@ -1654,9 +2270,9 @@ watch(
   padding-left: 14px;
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(13px, 1.1vw, 16px);
+  font-size: clamp(19.5px, 1.65vw, 24px);
   letter-spacing: 0.12em;
-  color: $color-primary;
+  color: var(--sy-accent);
 
   &::before {
     content: '';
@@ -1679,21 +2295,21 @@ watch(
 .ctx-row__label {
   width: 56px;
   flex-shrink: 0;
-  font-size: 12px;
+  font-size: 18px;
   letter-spacing: 0.12em;
   color: $color-gold;
 }
 
 .ctx-row__value {
   font-family: $font-body;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.78);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.78);
 
   &--tag {
     padding: 2px 10px;
     border-radius: $radius-pill;
-    background: rgba(140, 31, 40, 0.1);
-    color: $color-primary;
+    background: rgba(122, 26, 34, 0.1);
+    color: var(--sy-accent);
   }
 }
 
@@ -1702,8 +2318,232 @@ watch(
   align-items: center;
   gap: 6px;
   margin-top: 10px;
-  font-size: 12px;
-  color: $color-primary;
+  font-size: 18px;
+  color: var(--sy-accent);
+}
+
+/* ============================================================
+ * 智能体可视化面板（意图 / 工具 / 记忆）
+ * ========================================================== */
+/* ---------------- 面板1：意图识别（中栏对话上方） ---------------- */
+.intent {
+  flex-shrink: 0;
+  margin: 12px max(24px, calc((100% - 1120px) / 2)) 0;
+  border: 1px solid rgba(212, 179, 116, 0.4);
+  border-radius: $radius-md;
+  background: rgba(var(--sy-surface-rgb), 0.62);
+  overflow: hidden;
+}
+
+.intent__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  font-family: $font-body;
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.82);
+}
+
+.intent__dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: $color-gold;
+  animation: intentPulse 2s ease-out infinite;
+}
+
+@keyframes intentPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(212, 179, 116, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 7px rgba(212, 179, 116, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(212, 179, 116, 0);
+  }
+}
+
+.intent__title {
+  letter-spacing: 0.14em;
+  color: $color-gold;
+}
+
+.intent__value {
+  font-family: $font-title;
+  font-weight: 900;
+  font-size: calc(#{$fs-small} * 1.7);
+  color: var(--sy-accent);
+}
+
+.intent__caret {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: rgba(var(--sy-text-rgb), 0.5);
+  transition: transform $duration-normal $ease-out-expo;
+}
+
+.intent.is-collapsed .intent__caret {
+  transform: rotate(-90deg);
+}
+
+.intent__body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 12px;
+}
+
+.intent__label {
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  color: $color-gold;
+}
+
+.intent__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.intent__chip {
+  padding: 3px 12px;
+  border-radius: $radius-pill;
+  background: rgba(122, 26, 34, 0.1);
+  font-style: normal;
+  font-size: calc(#{$fs-small} * 1.5);
+  color: var(--sy-accent);
+}
+
+.intent__empty {
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.42);
+}
+
+/* ---------------- 面板2：工具调用（右栏） ---------------- */
+.tools-feed {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tool-call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(212, 179, 116, 0.28);
+  border-radius: $radius-md;
+  background: rgba(var(--sy-surface-rgb), 0.5);
+  font-size: calc(#{$fs-small} * 1.4);
+}
+
+.tool-call__name {
+  flex-shrink: 0;
+  font-family: $font-en;
+  color: var(--sy-accent);
+}
+
+.tool-call__args {
+  flex: 1;
+  min-width: 0;
+  color: rgba(var(--sy-text-rgb), 0.58);
+  @include text-ellipsis(1);
+}
+
+.tool-call__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tool-call__dur {
+  font-family: $font-en;
+  font-size: 16px;
+  color: $color-gold;
+}
+
+.tool-call__ok {
+  color: #3a8f5f;
+}
+
+.tools-feed__empty,
+.mem__empty {
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.42);
+}
+
+.tools-feed__live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 18px;
+  color: var(--sy-accent);
+}
+
+/* 工具记录：新记录从顶部滑入 */
+.tslide-enter-from {
+  opacity: 0;
+  transform: translateY(-16px);
+}
+
+.tslide-enter-active {
+  transition:
+    opacity 0.45s $ease-out-expo,
+    transform 0.45s $ease-out-expo;
+}
+
+.tslide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.tslide-leave-active {
+  position: absolute;
+  width: 100%;
+  transition:
+    opacity 0.35s $ease-out-expo,
+    transform 0.35s $ease-out-expo;
+}
+
+.tslide-move {
+  transition: transform 0.4s $ease-out-expo;
+}
+
+/* ---------------- 面板3：记忆体（右栏） ---------------- */
+.mem__hint {
+  margin-bottom: 8px;
+  font-size: 18px;
+  letter-spacing: 0.1em;
+  color: $color-gold;
+}
+
+.mem {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.mem__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.8);
+}
+
+.mem__dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: $color-gold;
 }
 
 .weather {
@@ -1714,21 +2554,21 @@ watch(
 
 .weather__temp {
   font-family: $font-en;
-  font-size: clamp(28px, 2.6vw, 40px);
+  font-size: clamp(42px, 3.9vw, 60px);
   line-height: 1;
   color: $color-gold;
 
   em {
     font-size: 0.38em;
     font-style: normal;
-    color: rgba(26, 26, 26, 0.5);
+    color: rgba(var(--sy-text-rgb), 0.5);
   }
 }
 
 .weather__text {
   font-family: $font-title;
   font-weight: 900;
-  font-size: clamp(14px, 1.2vw, 18px);
+  font-size: clamp(21px, 1.8vw, 27px);
   color: $color-ink;
 }
 
@@ -1737,8 +2577,8 @@ watch(
   flex-wrap: wrap;
   gap: 8px 16px;
   margin-top: 10px;
-  font-size: 12px;
-  color: rgba(26, 26, 26, 0.6);
+  font-size: 18px;
+  color: rgba(var(--sy-text-rgb), 0.6);
 }
 
 .forecast {
@@ -1747,15 +2587,15 @@ watch(
   gap: 6px;
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px dashed rgba(140, 31, 40, 0.15);
+  border-top: 1px dashed rgba(122, 26, 34, 0.15);
 
   li {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    font-size: 12px;
-    color: rgba(26, 26, 26, 0.7);
+    font-size: 18px;
+    color: rgba(var(--sy-text-rgb), 0.7);
 
     b {
       width: 44px;
@@ -1791,7 +2631,7 @@ watch(
     transform: translateX(4px);
 
     b {
-      color: $color-primary;
+      color: var(--sy-accent);
     }
   }
 }
@@ -1801,7 +2641,7 @@ watch(
   height: 56px;
   flex-shrink: 0;
   object-fit: cover;
-  border: 1px solid rgba(201, 168, 106, 0.4);
+  border: 1px solid rgba(212, 179, 116, 0.4);
   border-radius: $radius-md;
 }
 
@@ -1814,7 +2654,7 @@ watch(
   b {
     font-family: $font-title;
     font-weight: 900;
-    font-size: $fs-small;
+    font-size: calc(#{$fs-small} * 1.5);
     letter-spacing: 0.06em;
     color: $color-text-dark;
     transition: color $duration-normal $ease-out-expo;
@@ -1823,8 +2663,8 @@ watch(
 
   em {
     font-style: normal;
-    font-size: 12px;
-    color: rgba(26, 26, 26, 0.5);
+    font-size: 18px;
+    color: rgba(var(--sy-text-rgb), 0.5);
   }
 }
 
@@ -1839,12 +2679,12 @@ watch(
   align-items: center;
   gap: 8px;
   padding: 11px 12px;
-  border: 1px solid rgba(201, 168, 106, 0.42);
+  border: 1px solid rgba(212, 179, 116, 0.42);
   border-radius: $radius-md;
-  background: rgba(255, 255, 255, 0.6);
+  background: rgba(var(--sy-surface-rgb), 0.6);
   font-family: $font-body;
-  font-size: $fs-small;
-  color: rgba(26, 26, 26, 0.78);
+  font-size: calc(#{$fs-small} * 1.5);
+  color: rgba(var(--sy-text-rgb), 0.78);
   transition:
     border-color $duration-normal $ease-out-expo,
     color $duration-normal $ease-out-expo,
@@ -1853,14 +2693,14 @@ watch(
 
   &:hover {
     border-color: $color-gold;
-    color: $color-primary;
+    color: var(--sy-accent);
     transform: translateY(-2px);
     box-shadow: $shadow-sm;
   }
 }
 
 .tools__icon {
-  font-size: 15px;
+  font-size: 22.5px;
 }
 
 /* ---------------- 抽屉遮罩 ---------------- */
@@ -1878,7 +2718,13 @@ watch(
 /* 中屏（<1280）：右栏改为抽屉 */
 @include responsive(1280px) {
   .ai {
-    grid-template-columns: 250px minmax(0, 1fr);
+    --ai-left: 260px;
+    grid-template-columns: var(--ai-left) minmax(0, 1fr);
+  }
+
+  /* 右栏收进抽屉，隐藏右侧折叠把手 */
+  .chat-toggle--right {
+    display: none;
   }
 
   .ai-context {
@@ -1904,7 +2750,11 @@ watch(
 @include responsive(md) {
   .ai {
     grid-template-columns: minmax(0, 1fr);
-    padding-inline: 12px;
+  }
+
+  /* 小屏左右栏改为抽屉，隐藏折叠把手 */
+  .chat-toggle {
+    display: none;
   }
 
   .ai-side {
@@ -1925,8 +2775,62 @@ watch(
     }
   }
 
-  .msg__body {
-    max-width: 86%;
+  .msg--user .msg__body {
+    max-width: 88%;
   }
+}
+
+/* ============================================================
+ * 字体统一：整个对话界面使用思源宋体
+ * - 全局字体栈：思源宋体（含中文字体兼容栈）
+ * - 右侧边栏大标题：半粗 600
+ * - 正文（聊天内容 / 景点地名 / 列表）：常规 400，行高 1.6
+ * - 天气温度数字：24px 宋体（不超大）
+ * - 代码保持等宽，避免宋体下难读
+ * ========================================================== */
+.ai,
+.ai :deep(*) {
+  font-family: 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 代码等宽 */
+.ai :deep(code),
+.ai :deep(pre) {
+  font-family: 'JetBrains Mono', 'Consolas', 'Courier New', monospace !important;
+}
+
+/* 右侧边栏 / 面板大标题：半粗 */
+.ai .panel__title {
+  font-weight: 600;
+}
+
+/* 正文：常规字重 + 行高 1.6 */
+.ai .msg__bubble,
+.ai :deep(.md),
+.ai :deep(.md p),
+.ai :deep(.md li),
+.ai .reco__info b,
+.ai .reco__info em,
+.ai .ctx-row__value,
+.ai .mem__item,
+.ai .tool-call,
+.ai .sessions__title,
+.ai .ai-side__name {
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+/* 天气温度数字：缩小到 24px */
+.ai .weather__temp {
+  font-family: 'Source Han Serif SC', 'Noto Serif SC', 'Songti SC', 'SimSun', serif;
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.ai .weather__temp em {
+  font-size: 0.62em;
 }
 </style>

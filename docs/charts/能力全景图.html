@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>蜀韵管家 · 能力全景图</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: #ffffff; }
+  .canvas {
+    width: 1600px;
+    height: 1000px;
+    padding: 30px 60px;
+    background: #ffffff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    font-family: "Source Han Serif SC", "思源宋体", "Noto Serif SC", "Songti SC", serif;
+    color: #1A1A1A;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- 标题 ---------- */
+  .head { text-align: center; }
+  .head h1 { margin: 0; font-size: 36px; font-weight: 700; line-height: 1.2; letter-spacing: 0.04em; }
+  .head .rule { display: block; width: 60px; height: 3px; margin: 12px auto 0; background: #D4B374; }
+
+  /* ---------- 纵向层栈 ---------- */
+  .stack { flex: 1; display: flex; flex-direction: column; justify-content: space-between; margin-top: 16px; }
+  .layer { border-radius: 12px; padding: 14px 22px; }
+  .layer__title { font-size: 19px; font-weight: 700; line-height: 1.2; }
+  .layer__title .muted { font-weight: 400; font-size: 15px; color: #8a7d63; }
+
+  /* 第 1 层 · 用户输入 */
+  .l1 { background: #F5F1E8; }
+  .l1 .layer__title { margin-bottom: 8px; }
+  .l1 .txt { font-size: 15px; color: #3a3a3a; }
+  .l1 .eg { font-size: 15px; font-style: italic; color: #8a8a8a; margin-top: 4px; }
+
+  /* 第 2 层 · 意图识别 */
+  .l2 { background: #8C1F28; color: #ffffff; }
+  .l2 .layer__title { margin-bottom: 10px; }
+  .caps { display: flex; gap: 12px; }
+  .cap {
+    background: #ffffff; color: #8C1F28; border-radius: 16px;
+    padding: 9px 20px; font-size: 15px; font-weight: 700; line-height: 1;
+  }
+
+  /* 第 3 层 · 工具调用 */
+  .l3 { background: #ffffff; border: 2px solid #D4B374; }
+  .l3 .layer__title { margin-bottom: 10px; }
+  .cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .card { border: 1.5px dashed #D4B374; border-radius: 12px; padding: 10px 12px; }
+  .card h4 { margin: 0 0 8px; font-size: 14px; font-weight: 700; color: #8C1F28; line-height: 1.3; }
+  .card ul { margin: 0; padding: 0; list-style: none; }
+  .card li { font-size: 12.5px; color: #555555; line-height: 1.75; }
+
+  /* 第 4 层 · 记忆体 */
+  .l4 { background: #FBF6E9; }
+  .l4 .layer__title { margin-bottom: 10px; }
+  .mem { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .mem__col { background: #ffffff; border: 1px solid #E4D9BE; border-radius: 12px; padding: 12px 16px; }
+  .mem__col h4 { margin: 0 0 8px; font-size: 15px; font-weight: 700; color: #8C1F28; }
+  .mem__col ul { margin: 0; padding: 0; list-style: none; }
+  .mem__col li { font-size: 13px; color: #4a4a4a; line-height: 1.8; }
+
+  /* 第 5 层 · 输出 */
+  .l5 { background: #1A1A1A; color: #ffffff; }
+  .l5 .layer__title { margin-bottom: 10px; }
+  .out { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .out__item { border: 1px solid rgba(212, 179, 116, 0.6); border-radius: 12px; padding: 12px 16px; }
+  .out__item b { display: block; font-size: 15px; margin-bottom: 4px; color: #F1E4C4; }
+  .out__item span { font-size: 12.5px; color: #cfc6b4; line-height: 1.6; }
+
+  /* ---------- 连接箭头 ---------- */
+  .flow { display: flex; justify-content: center; align-items: center; height: 40px; }
+</style>
+</head>
+<body>
+  <div class="canvas">
+    <!-- 标题 -->
+    <header class="head">
+      <h1>蜀韵管家 · 能力全景图</h1>
+      <span class="rule"></span>
+    </header>
+
+    <!-- 五层能力 -->
+    <div class="stack">
+
+      <!-- 1 用户输入 -->
+      <section class="layer l1">
+        <div class="layer__title">用户输入</div>
+        <div class="txt">用户以自然语言描述需求</div>
+        <div class="eg">“帮我规划成都三日游，带父母”</div>
+      </section>
+
+      <div class="flow">
+        <svg width="26" height="40" viewBox="0 0 26 40" xmlns="http://www.w3.org/2000/svg">
+          <line x1="13" y1="0" x2="13" y2="29" stroke="#D4B374" stroke-width="2" />
+          <polygon points="13,40 6,28 20,28" fill="#D4B374" />
+        </svg>
+      </div>
+
+      <!-- 2 意图识别 -->
+      <section class="layer l2">
+        <div class="layer__title">意图识别</div>
+        <div class="caps">
+          <span class="cap">查景点</span>
+          <span class="cap">排行程</span>
+          <span class="cap">问文化</span>
+          <span class="cap">问美食</span>
+          <span class="cap">问交通</span>
+          <span class="cap">问天气</span>
+          <span class="cap">闲聊</span>
+        </div>
+      </section>
+
+      <div class="flow">
+        <svg width="26" height="40" viewBox="0 0 26 40" xmlns="http://www.w3.org/2000/svg">
+          <line x1="13" y1="0" x2="13" y2="29" stroke="#D4B374" stroke-width="2" />
+          <polygon points="13,40 6,28 20,28" fill="#D4B374" />
+        </svg>
+      </div>
+
+      <!-- 3 工具调用 -->
+      <section class="layer l3">
+        <div class="layer__title">工具调用 <span class="muted">（13 个工具/能力）</span></div>
+        <div class="cards">
+          <div class="card">
+            <h4>工作流 · 行程（4 个）</h4>
+            <ul>
+              <li>AI个性化行程规划</li>
+              <li>planAdd / planUpdate</li>
+              <li>planRemove / planList</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>工作流 · 收藏（3 个）</h4>
+            <ul>
+              <li>favAdd</li>
+              <li>favRemove</li>
+              <li>favList</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>工作流 · 知识库（2 个）</h4>
+            <ul>
+              <li>listTravel</li>
+              <li>listFood</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>插件 / MCP / 技能（4 个）</h4>
+            <ul>
+              <li>天气预报（插件）</li>
+              <li>UI生成（MCP）</li>
+              <li>weather-query（技能）</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- 双向箭头：工具读写记忆体 -->
+      <div class="flow">
+        <svg width="26" height="40" viewBox="0 0 26 40" xmlns="http://www.w3.org/2000/svg">
+          <line x1="13" y1="8" x2="13" y2="32" stroke="#D4B374" stroke-width="2" />
+          <polygon points="13,0 6,10 20,10" fill="#D4B374" />
+          <polygon points="13,40 6,30 20,30" fill="#D4B374" />
+        </svg>
+      </div>
+
+      <!-- 4 记忆体 -->
+      <section class="layer l4">
+        <div class="layer__title">记忆体</div>
+        <div class="mem">
+          <div class="mem__col">
+            <h4>短期记忆</h4>
+            <ul>
+              <li>会话上下文</li>
+              <li>由女娲平台托管</li>
+              <li>同一 sessionId 内连续</li>
+            </ul>
+          </div>
+          <div class="mem__col">
+            <h4>长期记忆</h4>
+            <ul>
+              <li>用户画像</li>
+              <li>同行人 / 偏好 / 预算 / 忌讳</li>
+              <li>跨会话保留</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <div class="flow">
+        <svg width="26" height="40" viewBox="0 0 26 40" xmlns="http://www.w3.org/2000/svg">
+          <line x1="13" y1="0" x2="13" y2="29" stroke="#D4B374" stroke-width="2" />
+          <polygon points="13,40 6,28 20,28" fill="#D4B374" />
+        </svg>
+      </div>
+
+      <!-- 5 输出 -->
+      <section class="layer l5">
+        <div class="layer__title">输出</div>
+        <div class="out">
+          <div class="out__item"><b>对话回复</b><span>SSE 流式逐字</span></div>
+          <div class="out__item"><b>UI 卡片</b><span>行程卡片，可加入行程</span></div>
+          <div class="out__item"><b>主动推送</b><span>天气 / 客流提醒</span></div>
+        </div>
+      </section>
+
+    </div>
+  </div>
+</body>
+</html>

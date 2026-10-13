@@ -40,8 +40,8 @@ onMounted(() => {
   background: radial-gradient(
     circle,
     $color-gold-soft 0%,
-    rgba(201, 168, 106, 0.06) 45%,
-    rgba(201, 168, 106, 0) 70%
+    rgba(212, 179, 116, 0.06) 45%,
+    rgba(212, 179, 116, 0) 70%
   );
   mix-blend-mode: soft-light;
 }

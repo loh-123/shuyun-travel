@@ -78,13 +78,15 @@ const toneClass = `is-${props.variant}`
   }
 
   &.is-on-light {
-    color: $color-primary;
+    color: var(--sy-accent);
   }
 }
 
 /* 描述 */
 .section-title__desc {
   margin-top: clamp(13px, 1.9vh, 24px);
+  /* 字号在原基础上放大 0.5× */
+  font-size: calc(#{$fs-body} * 1.5);
 
   &.is-on-dark {
     color: $color-text-light;
@@ -105,7 +107,7 @@ const toneClass = `is-${props.variant}`
   height: 1px;
   margin-right: 14px;
   vertical-align: 0.32em;
-  background: linear-gradient(90deg, $color-gold, rgba(201, 168, 106, 0.2));
+  background: linear-gradient(90deg, $color-gold, rgba(212, 179, 116, 0.2));
   position: relative;
 
   &::after {

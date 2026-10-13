@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=1600, initial-scale=1" />
+  <title>第6章 · 技术亮点对比表</title>
+  <style>
+    :root{
+      --red:#8C1F28; --gold:#D4B374; --ink:#1A1A1A; --gray:#6B7280; --paper:#F5F1E8;
+      --cn:"Source Han Serif SC","Noto Serif SC","LXGW WenKai","Songti SC",STSong,"Microsoft YaHei",serif;
+      --mono:"JetBrains Mono","Inter",monospace;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{width:1600px;height:1000px;overflow:hidden;}
+    body{background:#ffffff;color:var(--ink);font-family:var(--cn);-webkit-font-smoothing:antialiased;}
+    .canvas{
+      width:1600px;height:1000px;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:52px;
+    }
+
+    /* ---------- 标题 ---------- */
+    .head{text-align:center;}
+    .kicker{font-family:var(--mono);font-size:15px;letter-spacing:.55em;padding-left:.55em;color:var(--gold);margin-bottom:18px;}
+    .title{font-size:54px;font-weight:700;letter-spacing:.14em;padding-left:.14em;}
+    .subtitle{margin-top:18px;font-size:19px;color:var(--gray);letter-spacing:.12em;font-family:var(--mono);}
+    .rule{width:130px;height:3px;margin:24px auto 0;border-radius:2px;background:linear-gradient(90deg,var(--red),var(--gold));}
+
+    /* ---------- 对比表 ---------- */
+    table{
+      width:1440px;border-collapse:separate;border-spacing:0;
+      border:2px solid var(--gold);border-radius:14px;overflow:hidden;
+      background:#fff;box-shadow:0 26px 64px -30px rgba(26,26,26,.38);
+    }
+    thead th{
+      height:60px;background:var(--red);color:#fff;
+      font-size:20px;font-weight:700;letter-spacing:.16em;
+      text-align:left;padding:0 30px;font-family:var(--cn);
+    }
+    thead th.center{text-align:center;}
+    tbody td{
+      height:56px;padding:0 30px;vertical-align:middle;
+      font-size:18px;line-height:1.3;color:var(--gray);
+      font-family:var(--mono),var(--cn);
+    }
+    tbody tr:nth-child(odd)  td{background:#ffffff;}
+    tbody tr:nth-child(even) td{background:var(--paper);}
+    thead th + th,tbody td + td{border-left:1px solid rgba(212,179,116,.45);}
+
+    tbody td.dim{font-family:var(--cn);font-weight:700;font-size:19px;color:var(--ink);letter-spacing:.04em;}
+    tbody td.dim span{display:inline-block;padding-left:14px;border-left:4px solid var(--red);line-height:1.25;}
+    tbody td.ours{color:var(--red);font-weight:600;font-family:var(--mono),var(--cn);}
+    tbody td.effect{color:#9A7B32;font-weight:600;font-family:var(--mono),var(--cn);}
+  </style>
+</head>
+<body>
+  <div class="canvas">
+
+    <header class="head">
+      <div class="kicker">CHAPTER 06 · TECH HIGHLIGHTS</div>
+      <h1 class="title">技术亮点对比</h1>
+      <div class="subtitle">TRADITIONAL&nbsp;&nbsp;vs&nbsp;&nbsp;THIS PROJECT&nbsp;&nbsp;·&nbsp;&nbsp;EFFECT</div>
+      <div class="rule"></div>
+    </header>
+
+    <table>
+      <colgroup>
+        <col style="width:210px;" />
+        <col style="width:360px;" />
+        <col style="width:630px;" />
+        <col style="width:240px;" />
+      </colgroup>
+      <thead>
+        <tr>
+          <th>维度</th>
+          <th class="center">传统做法</th>
+          <th class="center">本项目做法</th>
+          <th class="center">效果</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dim"><span>AI 响应</span></td>
+          <td>一次性返回</td>
+          <td class="ours">SSE 流式逐字输出</td>
+          <td class="effect">首字延迟 &lt; 1s</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>3D 地图</span></td>
+          <td>静态图片 / 专业地图库</td>
+          <td class="ours">Three.js 自渲染</td>
+          <td class="effect">无外部服务依赖</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>数据动画</span></td>
+          <td>setInterval + ECharts 动画</td>
+          <td class="ours">rAF 每帧驱动</td>
+          <td class="effect">60fps 无停顿</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>城市 3D</span></td>
+          <td>无</td>
+          <td class="ours">高德 JS API 联动</td>
+          <td class="effect">省级市级两级地图</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>状态管理</span></td>
+          <td>各页面独立实现</td>
+          <td class="ours">StateBlock + DataTable 双基座</td>
+          <td class="effect">前台 13 + 后台 8</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>数据导入</span></td>
+          <td>手动 SQL</td>
+          <td class="ours">幂等 SQL 脚本</td>
+          <td class="effect">可重复执行</td>
+        </tr>
+        <tr>
+          <td class="dim"><span>注册验证</span></td>
+          <td>前端写死 1234</td>
+          <td class="ours">真实 QQ 邮箱 SMTP 发送</td>
+          <td class="effect">邮件可达用户邮箱</td>
+        </tr>
+      </tbody>
+    </table>
+
+  </div>
+</body>
+</html>

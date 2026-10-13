@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
  * 首页容器
- * - 5 个 100vh 分节（Lenis 平滑滚动 + lenis/snap 整屏吸附）
- * - fixed 背景舞台：5 层背景叠放，按当前屏交叉淡入（真正的「淡入淡出切换背景图」）
+ * - 6 个 100vh 分节（Lenis 平滑滚动 + lenis/snap 整屏吸附）
+ * - fixed 背景舞台：6 层背景叠放，按当前屏交叉淡入（真正的「淡入淡出切换背景图」）
  * - 四季屏把当前轮播图上报给舞台，因此它的背景同样参与交叉淡入
  * - 公共能力全部复用：useLenis（平滑滚动）/ ScrollIndicator（右侧指示器）/ Loading（加载动画）
  */
@@ -17,6 +17,7 @@ import Loading from '@/components/common/Loading.vue'
 import HeroSection from '@/components/home/HeroSection.vue'
 import DataSection from '@/components/home/DataSection.vue'
 import SeasonSection from '@/components/home/SeasonSection.vue'
+import HotScenicSection from '@/components/home/HotScenicSection.vue'
 import CultureSection from '@/components/home/CultureSection.vue'
 import AiSection from '@/components/home/AiSection.vue'
 
@@ -69,9 +70,10 @@ const seasonBg2x = ref(IMG.season2x)
 const heroActive = ref(false)
 
 const sections = [
-  { key: 'hero', label: '蜀韵智游' },
+  { key: 'hero', label: '蜀韵管家' },
   { key: 'data', label: '蜀地家底' },
   { key: 'season', label: '四季蜀韵' },
+  { key: 'hot', label: '热门景点' },
   { key: 'culture', label: '八大文化' },
   { key: 'ai', label: 'AI 管家' },
 ]
@@ -81,11 +83,9 @@ const stageLayers = computed<StageLayer[]>(() => [
   { key: 'hero', src: IMG.hero, src2x: IMG.hero2x, tone: 'dark' },
   { key: 'data', src: IMG.data, src2x: IMG.data2x, tone: 'dark' },
   { key: 'season', src: seasonBg.value, src2x: seasonBg2x.value, tone: 'dark' },
-  {
-    key: 'culture',
-    fill: 'radial-gradient(120% 90% at 12% 0%, rgba(201,168,106,0.22) 0%, rgba(232,227,216,0) 60%), #E8E3D8',
-    tone: 'none',
-  },
+  // 热门景点 / 八大文化：四川剪影整屏背景（背景样式见 .home__stage-fill--hot / --culture）
+  { key: 'hot', tone: 'none' },
+  { key: 'culture', tone: 'none' },
   { key: 'ai', src: IMG.ai, src2x: IMG.ai2x, tone: 'dark' },
 ])
 
@@ -165,7 +165,7 @@ onUnmounted(() => {
 
 <template>
   <div ref="rootEl" class="home">
-    <!-- ================= 固定背景舞台：5 层交叉淡入 ================= -->
+    <!-- ================= 固定背景舞台：6 层交叉淡入 ================= -->
     <div class="home__stage" aria-hidden="true">
       <div
         v-for="(layer, i) in stageLayers"
@@ -183,7 +183,12 @@ onUnmounted(() => {
           :fetchpriority="i === 0 ? 'high' : 'auto'"
           decoding="async"
         />
-        <div v-else class="home__stage-fill" :style="{ background: layer.fill }" />
+        <div
+          v-else
+          class="home__stage-fill"
+          :class="`home__stage-fill--${layer.key}`"
+          :style="{ background: layer.fill }"
+        />
 
         <div class="sy-overlay">
           <div v-if="layer.tone !== 'none'" class="sy-overlay__gradient" />
@@ -194,7 +199,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- ================= 5 个整屏分节 ================= -->
+    <!-- ================= 6 个整屏分节 ================= -->
     <section id="sec-0" class="home__section">
       <HeroSection :active="heroActive" />
     </section>
@@ -205,9 +210,12 @@ onUnmounted(() => {
       <SeasonSection @bg-change="onSeasonBgChange" />
     </section>
     <section id="sec-3" class="home__section">
-      <CultureSection />
+      <HotScenicSection />
     </section>
     <section id="sec-4" class="home__section">
+      <CultureSection />
+    </section>
+    <section id="sec-5" class="home__section">
       <AiSection />
     </section>
 
@@ -263,11 +271,43 @@ onUnmounted(() => {
   object-fit: cover;
 }
 
+/* 热门景点 / 八大文化两屏：四川剪影整屏背景 */
+.home__stage-fill--hot,
+.home__stage-fill--culture {
+  background-color: $color-shuxiu;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+
+  // 柔化层：顶部略提亮保证深色标题可读，向下渐隐让底图通透
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(247, 243, 234, 0.42) 0%,
+      rgba(247, 243, 234, 0.12) 55%,
+      rgba(247, 243, 234, 0.03) 100%
+    );
+  }
+}
+
+/* 热门景点屏：蓝色四川剪影 */
+.home__stage-fill--hot {
+  background-image: url('/images/scenic-bg.png');
+}
+
+/* 八大文化屏：红色四川剪影 */
+.home__stage-fill--culture {
+  background-image: url('/images/culture-bg.png');
+}
+
 /* 浅色层（宣纸屏）上不加墨蓝渐变，避免压暗 */
 .home__stage-light {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.24) 0%, rgba(232, 227, 216, 0) 100%);
+  background: linear-gradient(180deg, rgba(var(--sy-surface-rgb), 0.24) 0%, rgba(var(--sy-paper-rgb), 0) 100%);
 }
 
 @keyframes kenburns {

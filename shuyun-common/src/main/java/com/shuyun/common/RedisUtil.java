@@ -82,4 +82,22 @@ public class RedisUtil {
     public Boolean expire(String key, long timeout, TimeUnit unit) {
         return stringRedisTemplate.expire(key, timeout, unit);
     }
+
+    /**
+     * 自增计数（首次自增时设置过期时间）
+     *
+     * <p>常用于接口限流：{@code increment(key, 1, TimeUnit.MINUTES)}。</p>
+     *
+     * @param key     键
+     * @param timeout 首次自增时设置的过期时间
+     * @param unit    时间单位
+     * @return 自增后的值；Redis 不可用时返回 null
+     */
+    public Long increment(String key, long timeout, TimeUnit unit) {
+        Long value = stringRedisTemplate.opsForValue().increment(key);
+        if (value != null && value == 1L) {
+            stringRedisTemplate.expire(key, timeout, unit);
+        }
+        return value;
+    }
 }
