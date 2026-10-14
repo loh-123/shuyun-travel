@@ -43,3 +43,7 @@ build/
 
 ### 大型压缩包（Gitee 单文件100MB限制）###
 *.zip
+
+### Python 字节码缓存 ###
+__pycache__/
+*.pyc
